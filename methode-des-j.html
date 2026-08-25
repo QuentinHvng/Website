@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Méthode des J — EDN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF0EE; --surface:#FFF; --ink:#141917; --muted:#5F6E69; --faint:#8A9791;
+  --line:#D5DCD8; --line-strong:#B4C0BA;
+  --alert:#C0342C; --alert-soft:#F8E6E4; --warn:#B5731A; --warn-soft:#FAEEDC;
+  --none:#DCE2DE;
+  --display:"Bricolage Grotesque","Trebuchet MS",sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,monospace;
+  --r:4px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 20px 90px}
+
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:22px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 6px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(34px,6vw,54px);line-height:.92;letter-spacing:-.03em;margin:0}
+h1 em{font-style:normal;color:#3E9CA8}
+.today{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}
+.today b{display:block;font-family:var(--display);font-weight:700;font-size:24px;color:var(--ink);letter-spacing:-.02em}
+
+.figures{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.fig{background:var(--surface);padding:13px 15px}
+.fig b{display:block;font-family:var(--display);font-weight:700;font-size:27px;line-height:1;letter-spacing:-.02em}
+.fig span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.fig.hot b{color:var(--alert)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.card-title{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+
+.ribbon-card{margin-top:14px}
+.ribbon-scroll{overflow-x:auto}
+.ribbon{display:flex;align-items:flex-end;gap:2px;height:96px;min-width:100%}
+.rib-day{position:relative;flex:1 0 8px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;background:none;border:0;padding:0;cursor:pointer}
+.rib-day.week{margin-left:6px}
+.rib-day:focus-visible{outline:2px solid #3E9CA8;outline-offset:2px}
+.rib-ghost{position:absolute;left:0;right:0;bottom:0;background:var(--line);border-radius:2px}
+.rib-stack{position:relative;display:flex;flex-direction:column-reverse;width:100%;border-radius:2px;overflow:hidden}
+.rib-seg{width:100%;min-height:1px}
+.rib-flag{position:absolute;top:-1px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--alert)}
+.rib-axis{display:flex;gap:2px;min-width:100%;margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.rib-tick{flex:1 0 8px;position:relative;height:12px}
+.rib-tick.week{margin-left:6px}
+.rib-tick b{position:absolute;left:0;top:0;font-weight:500;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+
+.tabs{display:flex;gap:2px;margin:22px 0 14px;border-bottom:1px solid var(--line-strong);flex-wrap:wrap}
+.tab{font-size:14px;font-weight:500;color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:8px 13px;cursor:pointer;margin-bottom:-1px;font-family:var(--body)}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:#3E9CA8}
+.tab b{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:5px;font-weight:400}
+.tab[aria-selected="true"] b{color:#3E9CA8}
+.panel[hidden]{display:none}
+
+.day{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.day.saturated{border-color:var(--alert)}
+.day.off{background:transparent;border-style:dashed}
+.day.is-today{border-color:#3E9CA8;box-shadow:0 0 0 1px #3E9CA8}
+.day-head{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.day.off .day-head{border-bottom:0}
+.day-date{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.day-date b{color:var(--ink);font-weight:500}
+.day-tools{margin-left:auto;display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.gauge{width:64px;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.gauge i{display:block;height:100%;background:#3E9CA8}
+.day.saturated .gauge i{background:var(--alert)}
+.mini{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:2px;border:1px solid var(--line-strong);background:none;color:var(--muted);cursor:pointer}
+.mini:hover{border-color:var(--ink);color:var(--ink)}
+.mini.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.day-badge{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--alert);background:var(--alert-soft);padding:2px 7px;border-radius:2px}
+
+.items{list-style:none;margin:0;padding:0}
+.item{display:grid;grid-template-columns:18px 44px 1fr auto;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid var(--paper)}
+.item:last-child{border-bottom:0}
+.item input[type=checkbox]{width:16px;height:16px;accent-color:#3E9CA8;cursor:pointer}
+.item.done .name,.item.done .act{text-decoration:line-through;color:var(--faint)}
+.stage{font-family:var(--mono);font-size:11px;font-weight:500;padding:2px 0;border-radius:2px;text-align:center}
+.name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.name u{text-decoration:none;font-family:var(--mono);font-size:11px;color:var(--faint);margin-right:7px}
+.act{font-size:12px;color:var(--muted);text-align:right;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.late{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:2px;white-space:nowrap}
+.late.shift{color:var(--warn);background:var(--warn-soft)}
+.late.over{color:var(--alert);background:var(--alert-soft)}
+.free{padding:8px 14px;font-family:var(--mono);font-size:11px;color:var(--faint);border-top:1px dashed var(--line)}
+.free button{font:inherit;background:none;border:0;color:#3E9CA8;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+.gap{display:flex;align-items:center;gap:9px;margin:0 0 10px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.gap::before,.gap::after{content:"";flex:1;border-top:1px dashed var(--line-strong)}
+
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+input[type=text],input[type=number],input[type=date],select{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:2px;padding:7px 9px}
+input[type=text]{min-width:200px;flex:1}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid #3E9CA8;outline-offset:1px}
+.btn{font-family:var(--body);font-size:13px;font-weight:500;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--line-strong)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:hover:not(:disabled){opacity:.87}
+
+.list{list-style:none;margin:0;padding:0;max-height:560px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.row{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--paper)}
+.row:last-child{border-bottom:0}
+.row input[type=checkbox]{width:15px;height:15px;accent-color:#3E9CA8;cursor:pointer}
+.row .meta{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap}
+
+.table-scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);font-weight:400}
+td.wide{white-space:normal;min-width:200px}
+td.num{font-family:var(--mono);font-size:11px;color:var(--faint)}
+
+.cov-group{margin-bottom:16px}
+.cov-group h4{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 7px;font-weight:400}
+.cov-group h4 span{color:var(--faint)}
+.squares{display:flex;flex-wrap:wrap;gap:3px}
+.sq{width:14px;height:14px;border-radius:2px;border:0;padding:0;cursor:pointer}
+.sq:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.detail{border-left:3px solid #3E9CA8;background:var(--surface);padding:10px 14px;margin-bottom:14px;font-size:13px;border-radius:0 2px 2px 0}
+.detail b{font-weight:600}
+.detail .chain{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;display:flex;flex-wrap:wrap;gap:8px}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+label.lbl{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.week-caps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.week-caps div{text-align:center}
+.week-caps label{font-family:var(--mono);font-size:10px;text-transform:uppercase;color:var(--muted)}
+.week-caps input{width:100%;text-align:center;padding:6px 2px}
+.acts{display:grid;gap:6px}
+.actrow{display:grid;grid-template-columns:52px 1fr 62px;gap:8px;align-items:center}
+.actrow input[type=text]{min-width:0;width:100%}
+.actrow input[type=number]{width:100%;text-align:center;padding:6px 4px}
+.hint{font-size:12px;color:var(--faint);margin:8px 0 0;line-height:1.55}
+.notes{max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:11px;color:var(--muted);border-left:3px solid var(--warn);background:var(--warn-soft);padding:9px 12px;border-radius:0 2px 2px 0}
+.notes div{padding:1px 0}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-size:13px;padding:10px 18px;border-radius:3px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+.toast.on{opacity:1}
+.blank{padding:36px 18px;text-align:center;color:var(--muted);font-size:14px}
+.sticky{position:sticky;top:0;background:var(--paper);padding:10px 0;z-index:5;border-bottom:1px solid var(--line)}
+
+@media (max-width:700px){
+  .wrap{padding:18px 12px 70px}
+  .today{text-align:left}
+  .item{grid-template-columns:18px 42px 1fr;grid-auto-rows:auto;row-gap:2px}
+  .act{grid-column:2/4;grid-row:2;text-align:left;max-width:none;white-space:normal}
+  .item .late{grid-column:2/4;grid-row:3;justify-self:start;margin-top:1px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.tabs,.bar,.ribbon-card,.toast,.mini,.free{display:none!important}body{background:#fff}.day{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">EDN · méthode des J · Anki +</p>
+      <h1>Huit <em>J</em>,<br>quatre cent trente-six items</h1>
+    </div>
+    <div class="today" id="todayBox"></div>
+  </header>
+
+  <div class="figures" id="figures"></div>
+
+  <section class="card ribbon-card">
+    <p class="card-title">Charge à venir</p>
+    <div class="ribbon-scroll"><div class="ribbon" id="ribbon"></div><div class="rib-axis" id="ribAxis"></div></div>
+  </section>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <section class="panel" id="panel-agenda" role="tabpanel"></section>
+  <section class="panel" id="panel-retards" role="tabpanel" hidden></section>
+  <section class="panel" id="panel-reserve" role="tabpanel" hidden></section>
+  <section class="panel" id="panel-couverture" role="tabpanel" hidden></section>
+  <section class="panel" id="panel-reglages" role="tabpanel" hidden></section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script id="dataset" type="application/json">{"scale":["J0","J1","J3","J7","J14","J30","J45","J60","J80","J100","J130","J160"],"items":[{"n":"001","t":"La relation médecin-malade","s":"Mixte","r":"Med G","a":1,"d":{"J0":"2026-05-18","J1":"2026-05-19","J3":"2026-05-21","J7":"2026-05-25","J14":"2026-06-02","J30":"2026-06-24"}},{"n":"002","t":"Les valeurs professionnelles du médecin et des autres professions de santé.","s":"","r":"","a":0,"d":{}},{"n":"003","t":"Le raisonnement et la décision en médecine. La médecine fondée sur les preuves","s":"Collège","r":"Santé publique","a":1,"d":{"J0":"2026-07-21"}},{"n":"004","t":"Qualité et sécurité des soins.","s":"Collège","r":"Santé publique","a":1,"d":{"J0":"2026-06-17","J1":"2026-06-29","J3":"2026-07-02"}},{"n":"005","t":"La gestion des erreurs et des plaintes; l'aléa thérapeutique, responsabilité médicale","s":"ECNi","r":"Santé publique","a":1,"d":{"J0":"2026-05-27","J1":"2026-05-28","J3":"2026-05-30","J7":"2026-06-03","J14":"2026-06-14","J30":"2026-07-12"}},{"n":"006","t":"L'organisation de l'exercice clinique et les méthodes qui permettent de…","s":"","r":"","a":0,"d":{}},{"n":"007","t":"Les droits individuels et collectifs du patient","s":"","r":"","a":0,"d":{}},{"n":"008","t":"Les discriminations","s":"","r":"","a":0,"d":{}},{"n":"009","t":"Introduction à l’éthique médicale","s":"","r":"","a":0,"d":{}},{"n":"010","t":"Approches transversales du corps","s":"ECNi","r":"LISA","a":1,"d":{"J0":"2026-05-10","J1":"2026-05-11","J3":"2026-05-13","J7":"2026-05-17","J14":"2026-05-25"}},{"n":"011","t":"Violences et santé","s":"","r":"","a":0,"d":{}},{"n":"012","t":"Violences sexuelles","s":"Collège","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-06-06","J1":"2026-06-10","J3":"2026-06-11","J7":"2026-06-18","J14":"2026-07-06"}},{"n":"013","t":"Certificats médicaux. Décès et législation","s":"ECNi","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-06-08","J1":"2026-06-12","J3":"2026-06-15","J7":"2026-06-20","J14":"2026-07-08"}},{"n":"014","t":"La mort","s":"","r":"","a":0,"d":{}},{"n":"015","t":"Soins psychiatriques sans consentement","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-27","J1":"2026-05-28","J3":"2026-05-30","J7":"2026-06-03","J14":"2026-06-14","J30":"2026-07-12"}},{"n":"016","t":"Organisation du système de soins. Sa régulation. Les indicateurs. Parcours","s":"ECNi","r":"Santé publique","a":1,"d":{"J0":"2026-06-17","J1":"2026-06-29","J3":"2026-07-03","J7":"2026-07-09"}},{"n":"017","t":"Télémédecine, télésanté et téléservices en santé","s":"","r":"","a":0,"d":{}},{"n":"018","t":"Santé et numérique","s":"ECNi","r":"Santé publique","a":1,"d":{"J0":"2026-05-25","J1":"2026-05-28","J3":"2026-05-30","J7":"2026-06-02","J14":"2026-06-13","J30":"2026-07-11"}},{"n":"019","t":"La sécurité sociale. L'assurance maladie. Les assurances complémentaires","s":"","r":"","a":0,"d":{}},{"n":"020","t":"La méthodologie de la recherche en santé","s":"","r":"","a":0,"d":{}},{"n":"021","t":"Mesure de l'état de santé de la population","s":"","r":"","a":0,"d":{}},{"n":"022","t":"Maladies rares","s":"ECNi","r":"Génétique","a":1,"d":{"J0":"2026-05-16","J1":"2026-05-17","J3":"2026-05-19","J7":"2026-05-23","J14":"2026-05-31","J30":"2026-06-21"}},{"n":"023","t":"Grossesse normale","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-06-17","J1":"2026-06-29","J3":"2026-07-02","J7":"2026-07-09"}},{"n":"024","t":"Principales complications de la grossesse","s":"","r":"","a":0,"d":{}},{"n":"025","t":"Grossesse extra-utérine","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-05-27","J1":"2026-05-28","J3":"2026-06-01","J7":"2026-06-03","J14":"2026-06-14","J30":"2026-07-12"}},{"n":"026","t":"Douleur abdominale aiguë chez une femme enceinte","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-21"}},{"n":"027","t":"Prévention des risques fœtaux : infection, médicaments, toxiques, irradiation","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-09"}},{"n":"027","t":"↳ Infections","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-09"}},{"n":"027","t":"↳ Toxiques / médicaments","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-09"}},{"n":"027","t":"↳ Allo-immunisation","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-09"}},{"n":"027","t":"↳ Irradiation","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-09"}},{"n":"028","t":"Connaître les particularités de l'infection urinaire au cours de la grossesse","s":"","r":"","a":0,"d":{}},{"n":"029","t":"Connaître les principaux risques professionnels pour la maternité, liés au","s":"Collège","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-06-10","J1":"2026-06-12","J3":"2026-06-13","J7":"2026-06-20","J14":"2026-07-08"}},{"n":"030","t":"Prématurité et retard de croissance intra-utérin : facteurs de risque et prévention","s":"","r":"","a":0,"d":{}},{"n":"031","t":"Accouchement, délivrance et suites de couches normales","s":"","r":"","a":0,"d":{}},{"n":"032","t":"Évaluation et soins du nouveau-né à terme","s":"Collège","r":"Pédia","a":1,"d":{"J0":"2026-06-29"}},{"n":"033","t":"Allaitement maternel","s":"","r":"","a":0,"d":{}},{"n":"034","t":"Suites de couches pathologiques : pathologie maternelle dans les 40 jours","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-06-18","J1":"2026-07-01","J3":"2026-07-05","J7":"2026-07-11"}},{"n":"035","t":"Anomalies du cycle menstruel. Métrorragies","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-06-08","J1":"2026-06-12","J3":"2026-06-14","J7":"2026-06-20","J14":"2026-07-08"}},{"n":"036","t":"Contraception","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-05-28","J1":"2026-05-30","J3":"2026-05-31","J7":"2026-06-04","J14":"2026-06-16","J30":"2026-07-23"}},{"n":"037","t":"Interruption volontaire de grossesse","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-05-18","J1":"2026-05-19","J3":"2026-05-21","J7":"2026-05-25","J14":"2026-06-02","J30":"2026-06-24"}},{"n":"038","t":"Infertilité du couple : conduite de la première consultation","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-07-21"}},{"n":"039","t":"Assistance médicale à la procréation : principaux aspects biologiques, médicaux et éthiques","s":"","r":"","a":0,"d":{}},{"n":"040","t":"Algies pelviennes chez la femme","s":"","r":"","a":0,"d":{}},{"n":"041","t":"Endométriose","s":"","r":"","a":0,"d":{}},{"n":"042","t":"Aménorrhée","s":"","r":"","a":0,"d":{}},{"n":"043","t":"Hémorragie génitale chez la femme","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-06-08","J1":"2026-06-12","J3":"2026-06-14","J7":"2026-06-20","J14":"2026-07-08"}},{"n":"044","t":"Tuméfaction pelvienne chez la femme","s":"","r":"","a":0,"d":{}},{"n":"045","t":"Trisomies autosomiques: T21, T13, T18","s":"ECNi","r":"Génétique","a":1,"d":{"J0":"2026-04-22","J1":"2026-04-23","J3":"2026-04-25","J7":"2026-04-29","J14":"2026-05-07","J30":"2026-05-22","J60":"2026-07-06"}},{"n":"045","t":"Dysomies gonosomes: Turner, Klinefelter","s":"","r":"","a":0,"d":{}},{"n":"045","t":"Autosomique récessif: Mucovisidose","s":"ECNi","r":"Génétique","a":1,"d":{"J0":"2026-04-21","J1":"2026-04-23","J3":"2026-04-25","J7":"2026-04-29","J14":"2026-05-07","J30":"2026-05-22","J60":"2026-07-06"}},{"n":"045","t":"X dominant: Syndrome de l'X fragile","s":"ECNi","r":"Génétique","a":1,"d":{"J0":"2026-04-21","J1":"2026-04-23","J3":"2026-04-25","J7":"2026-04-29","J14":"2026-05-07","J30":"2026-05-22","J60":"2026-07-06"}},{"n":"046","t":"Médecine génomique","s":"ECNi","r":"Génétique","a":1,"d":{"J0":"2026-04-09","J1":"2026-04-10","J3":"2026-04-12","J7":"2026-04-16","J14":"2026-04-24","J30":"2026-05-09","J60":"2026-06-11"}},{"n":"047","t":"Suivi d'un nourrisson, d'un enfant et d'un adolescent normal.","s":"Collège","r":"Pédia","a":1,"d":{"J0":"2026-07-10"}},{"n":"048","t":"Alimentation et besoins nutritionnels du nourrisson et de l'enfant","s":"Collège","r":"Pédia","a":1,"d":{"J0":"2026-06-25","J1":"2026-07-12","J3":"2026-07-23"}},{"n":"049","t":"Puberté normale et pathologique","s":"","r":"","a":0,"d":{}},{"n":"050","t":"Pathologie génito-scrotale","s":"Collège","r":"Uro","a":1,"d":{"J0":"2026-06-29"}},{"n":"051","t":"Troubles de la miction chez l'enfant","s":"ECNi","r":"Pédia","a":1,"d":{"J0":"2026-04-08","J1":"2026-04-09","J3":"2026-04-11","J7":"2026-04-15","J14":"2026-04-23","J30":"2026-05-08","J60":"2026-06-10"}},{"n":"052","t":"Strabisme et amblyopie de l'enfant","s":"","r":"","a":0,"d":{}},{"n":"053","t":"Retard de croissance staturo-pondérale","s":"Collège","r":"Pédia","a":1,"d":{"J0":"2026-06-25","J1":"2026-07-21","J3":"2026-07-21"}},{"n":"054","t":"Boiterie chez l'enfant","s":"ECNi","r":"Pédia","a":1,"d":{"J0":"2026-05-18","J1":"2026-05-19","J3":"2026-05-21","J7":"2026-05-25","J14":"2026-06-02","J30":"2026-06-24"}},{"n":"055","t":"Développement psychomoteur du nourrisson, de l'enfant","s":"","r":"","a":0,"d":{}},{"n":"056","t":"L'enfant handicapé","s":"Collège","r":"MPR","a":1,"d":{"J0":"2026-07-23"}},{"n":"057","t":"Maltraitance et enfants en danger.","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-05-28","J1":"2026-05-29","J3":"2026-05-31","J7":"2026-06-04","J14":"2026-06-16","J30":"2026-07-23"}},{"n":"058","t":"Sexualité normale et ses troubles","s":"","r":"","a":0,"d":{}},{"n":"059","t":"Sujets en situation de précarité","s":"","r":"Med G","a":0,"d":{}},{"n":"060","t":"Connaître les facteurs de risque, prévention, dépistage des troubles psychiques de l'enfant à la personne âgée","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-18","J1":"2026-05-19","J3":"2026-05-21","J7":"2026-05-25","J14":"2026-06-02","J30":"2026-06-24"}},{"n":"061","t":"Les bases des classifications des troubles mentaux","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-18","J1":"2026-05-19","J3":"2026-05-21","J7":"2026-05-25","J14":"2026-06-02","J30":"2026-06-24"}},{"n":"062","t":"Décrire l'organisation de l'offre de soins en psychiatrie, de l'enfant à la personne âgée","s":"ECNi","r":"Psy","a":0,"d":{"J0":"2026-01-29","J1":"2026-03-03"}},{"n":"063","t":"Trouble schizophrénique","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-08","J1":"2026-06-12","J3":"2026-06-21","J7":"2026-07-08"}},{"n":"064","t":"Trouble bipolaire","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-07-09"}},{"n":"065","t":"Trouble délirant persistant","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-11","J1":"2026-06-17","J3":"2026-06-18","J7":"2026-06-26","J14":"2026-07-12"}},{"n":"066a","t":"EDC","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066b","t":"TAG","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066c","t":"Trouble panique","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066d","t":"Phobies","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066e","t":"TOC","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066f","t":"TSPT","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066g","t":"Trouble de l'adaptation","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"066h","t":"Troubles de la personnalité","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-23"}},{"n":"067","t":"Troubles envahissants du développement","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-26","J1":"2026-07-23"}},{"n":"068","t":"Troubles du comportement de l'adolescent","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-26","J1":"2026-07-23","J3":"2026-07-23","J7":"2026-07-23"}},{"n":"069","t":"Troubles psychiques de la grossesse et du post-partum","s":"Collège","r":"PSY","a":0,"d":{"J0":"2026-03-06"}},{"n":"070","t":"Troubles psychiques du sujet âgé","s":"","r":"","a":0,"d":{}},{"n":"071","t":"Troubles des conduites alimentaires","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-23"}},{"n":"072","t":"Troubles à symptomatologie somatique et apparentés","s":"","r":"","a":0,"d":{}},{"n":"073","t":"Différents types de techniques psychothérapeutiques","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-06-17","J1":"2026-06-29","J3":"2026-07-08"}},{"n":"074","t":"→ Antipsychotiques (neuroleptiques)","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"074","t":"→ Antidépresseurs","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"074","t":"→ Anxiolytiques","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"074","t":"→ Thymorégulateurs","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"074","t":"→ Hypnotiques","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"074","t":"→ Psychostimulants","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-07-05"}},{"n":"075","t":"Addiction au tabac","s":"Collège","r":"Pneumo","a":1,"d":{"J0":"2026-07-23"}},{"n":"076","t":"Addiction à l'alcool","s":"","r":"","a":0,"d":{}},{"n":"077","t":"Addiction aux médicaments psychotropes (voir item 322)","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-18","J1":"2026-07-01","J3":"2026-07-05","J7":"2026-07-11"}},{"n":"078","t":"Addiction au cannabis, à la cocaïne, aux amphétamines, aux opiacés, aux drogues de synthèse (voir item 322)","s":"Collège","r":"Psy","a":1,"d":{"J0":"2026-06-29"}},{"n":"079","t":"Addictions comportementales","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-06-18","J1":"2026-07-02","J3":"2026-07-05","J7":"2026-07-10"}},{"n":"080","t":"Dopage et conduites dopantes (voir item 256)","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-04-01","J1":"2026-04-02","J3":"2026-04-04","J7":"2026-04-08","J14":"2026-04-16","J30":"2026-05-01","J60":"2026-05-31"}},{"n":"081","t":"Altération chronique de la vision","s":"ECNi","r":"Ophtalmo","a":1,"d":{"J0":"2026-05-29","J1":"2026-05-30","J3":"2026-06-01","J7":"2026-06-05","J14":"2026-06-18"}},{"n":"081","t":"↳ DMLA","s":"ECNi","r":"Ophtalmo","a":1,"d":{"J0":"2026-05-29","J1":"2026-05-30","J3":"2026-06-01","J7":"2026-06-05","J14":"2026-06-18"}},{"n":"081","t":"↳ Cataracte","s":"ECNi","r":"Ophtalmo","a":1,"d":{"J0":"2026-05-29","J1":"2026-05-30","J3":"2026-06-01","J7":"2026-06-05","J14":"2026-06-18"}},{"n":"082","t":"Altération aiguë de la vision","s":"Collège","r":"Ophtalmo","a":1,"d":{"J0":"2026-07-09"}},{"n":"082","t":"↳ OACR","s":"Collège","r":"Ophtalmo","a":1,"d":{"J0":"2026-07-09"}},{"n":"082","t":"↳ OVCR","s":"Collège","r":"Ophtalmo","a":1,"d":{"J0":"2026-07-09"}},{"n":"082","t":"↳ NOIA","s":"Collège","r":"Ophtalmo","a":1,"d":{"J0":"2026-07-09"}},{"n":"083","t":"Infections et inflammations oculaires","s":"","r":"","a":0,"d":{}},{"n":"084","t":"Glaucomes","s":"ECNi","r":"Ophtalmo","a":1,"d":{"J0":"2026-05-19","J1":"2026-05-20","J3":"2026-05-22","J7":"2026-05-26","J14":"2026-06-03"}},{"n":"085","t":"Troubles de la réfraction","s":"","r":"","a":0,"d":{}},{"n":"086","t":"Pathologie des paupières","s":"Collège","r":"Ophtalmo","a":1,"d":{"J0":"2026-05-29","J1":"2026-06-01","J3":"2026-06-05","J14":"2026-06-18"}},{"n":"087","t":"Epistaxis","s":"Collège","r":"ORL","a":1,"d":{"J0":"2026-07-23"}},{"n":"088","t":"Trouble aigu de la parole. Dysphonie","s":"","r":"","a":0,"d":{}},{"n":"089","t":"Altération de la fonction auditive","s":"","r":"","a":0,"d":{}},{"n":"090","t":"Pathologie des glandes salivaires","s":"","r":"","a":0,"d":{}},{"n":"091","t":"Déficit neurologique récent (voir item 340)","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-05-30","J1":"2026-05-31","J3":"2026-06-01","J7":"2026-05-06","J14":"2026-06-18"}},{"n":"092","t":"Déficit moteur et et ou sensitif des membres","s":"","r":"","a":0,"d":{}},{"n":"093","t":"Compression médullaire non traumatique et syndrome de la queue de cheval","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-06-09","J1":"2026-06-13","J3":"2026-06-15","J7":"2026-06-22","J14":"2026-07-10"}},{"n":"094","t":"Rachialgie","s":"Collège","r":"MPR","a":1,"d":{"J0":"2026-03-26","J1":"2026-03-27","J3":"2026-03-29","J7":"2026-04-02","J14":"2026-04-09"}},{"n":"095","t":"Radiculalgie et syndrome canalaire","s":"Collège","r":"Rhumato","a":1,"d":{"J0":"2026-07-10"}},{"n":"096","t":"Neuropathies périphériques","s":"","r":"","a":0,"d":{}},{"n":"097","t":"Polyradiculonévrite aiguë inflammatoire (syndrome de Guillain-Barré)","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-05-30","J1":"2026-05-31","J3":"2026-06-02","J7":"2026-05-06","J14":"2026-06-18"}},{"n":"098","t":"Myasthénie","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-05-30","J1":"2026-05-31","J3":"2026-06-03","J7":"2026-06-10","J14":"2026-06-20"}},{"n":"099","t":"Migraine, névralgie du trijumeau et algies de la face","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-06-19","J1":"2026-07-04","J3":"2026-07-07","J7":"2026-07-11"}},{"n":"100","t":"Céphalée inhabituelle aiguë et chronique chez l'adulte et l'enfant","s":"","r":"","a":0,"d":{}},{"n":"101","t":"Paralysie faciale","s":"","r":"","a":0,"d":{}},{"n":"102","t":"Diplopie","s":"","r":"","a":0,"d":{}},{"n":"103","t":"Vertige","s":"ECNi","r":"ORL","a":1,"d":{"J0":"2026-06-19","J1":"2026-07-04","J3":"2026-07-07","J7":"2026-07-11"}},{"n":"104","t":"Sclérose en plaques","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-03-25","J1":"2026-03-26","J3":"2026-03-27","J7":"2026-04-01","J14":"2026-04-08","J30":"2026-04-23","J60":"2026-05-23"}},{"n":"105","t":"Épilepsie de l'enfant et de l'adulte, fusion 346","s":"Collège","r":"Neuro","a":1,"d":{"J0":"2026-07-10"}},{"n":"106","t":"Maladie de Parkinson","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-06-09","J1":"2026-06-13","J3":"2026-06-15","J7":"2026-06-23","J14":"2026-07-09"}},{"n":"107","t":"Mouvements anormaux","s":"","r":"","a":0,"d":{}},{"n":"108/132","t":"Confusion, démences (voir item 132)","s":"","r":"","a":0,"d":{}},{"n":"109","t":"Troubles de la marche et de l'équilibre","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-06-19","J1":"2026-07-04","J3":"2026-07-07","J7":"2026-07-11"}},{"n":"110","t":"Troubles du sommeil de l'enfant et de l'adulte","s":"ECNi","r":"Neuro","a":1,"d":{"J0":"2026-06-18","J1":"2026-07-02","J3":"2026-07-05","J7":"2026-07-10"}},{"n":"111","t":"Dermatoses faciales : acné, rosacée, dermatite séborrhéique","s":"","r":"","a":0,"d":{}},{"n":"112","t":"Dermatose bulleuse touchant la peau et et ou les muqueuses externes","s":"ECNi","r":"Dermato","a":1,"d":{"J0":"2026-05-19","J1":"2026-05-20","J3":"2026-05-22","J7":"2026-05-26","J14":"2026-06-02"}},{"n":"113","t":"Hémangiomes et malformations vasculaires cutanées","s":"","r":"","a":0,"d":{}},{"n":"114","t":"Exanthème et érythrodermie de l'adulte et enfant ↳ surtout erythrodermie (exanthème en ped: 164)","s":"","r":"","a":0,"d":{}},{"n":"115","t":"Toxidermies","s":"Collège","r":"Dermato","a":1,"d":{"J0":"2026-06-30"}},{"n":"116","t":"Prurit","s":"","r":"","a":0,"d":{}},{"n":"117","t":"Psoriasis","s":"","r":"","a":0,"d":{}},{"n":"117","t":"Rhumatisme Psoriasique","s":"","r":"","a":0,"d":{}},{"n":"118","t":"La personne handicapée : bases de l'évaluation fonctionnelle et","s":"ECNi","r":"MPR","a":1,"d":{"J0":"2026-05-11","J1":"2026-05-12","J3":"2026-05-14","J7":"2026-05-18","J14":"2026-05-26","J30":"2026-06-13"}},{"n":"119","t":"Soin et accompagnement dans la maladie chronique et le handicap","s":"ECNi","r":"LISA","a":1,"d":{"J0":"2026-05-29"}},{"n":"120","t":"Complications de l'immobilité et du décubitus. Prévention et prise en charge","s":"ECNi","r":"MMU","a":1,"d":{"J0":"2026-05-20","J1":"2026-05-21","J3":"2026-05-23","J7":"2026-05-27","J14":"2026-07-01"}},{"n":"121","t":"Le handicap psychique (voir item 56 et 118)","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-29","J1":"2026-05-30","J3":"2026-06-01","J7":"2026-06-05","J14":"2026-06-18"}},{"n":"122","t":"Principales techniques de rééducation et de réadaptation","s":"ECNi","r":"MPR","a":1,"d":{"J0":"2026-06-01","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-04","J14":"2026-06-11","J30":"2026-06-22"}},{"n":"123","t":"Vieillissement normal","s":"Collège","r":"Gériatrie","a":1,"d":{"J0":"2026-06-10","J1":"2026-06-15","J3":"2026-06-24","J7":"2026-07-11"}},{"n":"124","t":"Ménopause, insuffisance ovarienne prématurée, andropause, déficit androgénique lié à l’âge","s":"","r":"","a":0,"d":{}},{"n":"125","t":"Troubles de la miction et incontinence urinaire de l'adulte et du sujet âgé","s":"Collège","r":"Uro","a":1,"d":{"J0":"2026-04-28","J1":"2026-04-29","J3":"2026-05-01","J7":"2026-05-05","J14":"2026-05-13","J30":"2026-05-28","J60":"2026-07-23"}},{"n":"126","t":"Trouble de l'érection","s":"","r":"","a":0,"d":{}},{"n":"127","t":"Hypertrophie bénigne de la prostate","s":"Collège","r":"Uro","a":1,"d":{"J0":"2026-06-20","J1":"2026-07-06","J3":"2026-07-07"}},{"n":"128","t":"Ostéopathies fragilisantes","s":"ECNi","r":"Rhumato","a":1,"d":{"J0":"2026-06-01","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-11","J14":"2026-06-22"}},{"n":"129","t":"Arthrose","s":"Collège","r":"Rhumato","a":1,"d":{"J0":"2026-06-10","J1":"2026-06-13","J3":"2026-06-16","J7":"2026-06-21","J14":"2026-07-09"}},{"n":"130","t":"La personne âgée malade : particularités sémiologiques, psychologiques","s":"Collège","r":"Gériatrie","a":1,"d":{"J0":"2026-06-26","J1":"2026-07-11","J3":"2026-07-11","J7":"2026-07-12","J14":"2026-07-23","J30":"2026-07-23","J60":"2026-07-23"}},{"n":"131","t":"Chutes; Troubles de la marche et de l'équilibre (voir item 109)","s":"ECNi","r":"Gériatrie","a":1,"d":{"J0":"2026-06-19","J1":"2026-07-04","J3":"2026-07-07","J7":"2026-07-11"}},{"n":"132","t":"Troubles cognitifs → fusion item 108","s":"","r":"","a":0,"d":{}},{"n":"133","t":"Autonomie et dépendance chez le sujet âgé","s":"ECNi","r":"Gériatrie","a":1,"d":{"J0":"2026-05-20","J1":"2026-05-21","J3":"2026-05-23","J7":"2026-05-28","J14":"2026-06-04","J30":"2026-06-30"}},{"n":"134","t":"Bases neurophysiologiques, mécanismes physiopathologiques d'une douleur aiguë et d'une douleur chronique.","s":"Collège","r":"","a":1,"d":{"J0":"2026-06-20","J1":"2026-07-06","J3":"2026-07-07","J7":"2026-07-12"}},{"n":"135","t":"Thérapeutiques antalgiques, médicamenteuses et non médicamenteuses.","s":"","r":"","a":0,"d":{}},{"n":"136","t":"Anesthésie locale, locorégionale et générale.","s":"ECNi","r":"MAR","a":1,"d":{"J0":"2026-06-30"}},{"n":"137","t":"Douleur chez l'enfant : évaluation et traitements antalgiques","s":"ECNi","r":"Péd","a":1,"d":{"J0":"2026-02-26"}},{"n":"138","t":"Douleur chez la personne vulnérable","s":"","r":"","a":0,"d":{}},{"n":"139","t":"Soins palliatifs pluridisciplinaires chez un malade en phase palliative ou terminale d'une maladie grave, chronique ou létale (1). Principaux repères cliniques. Modalités d'organisation des équipes, en établissement de santé et en et en ambulatoire.","s":"","r":"","a":0,"d":{}},{"n":"140","t":"Soins palliatifs pluridisciplinaires chez un malade en phase palliative ou terminale d'une maladie grave, chronique ou létale (2). Accompagnement de la personne malade et de son entourage. Principaux repères éthiques.","s":"Collège","r":"Éthique et DSP","a":1,"d":{"J0":"2026-06-27"}},{"n":"141","t":"Soins palliatifs pluridisciplinaires chez un malade en phase palliative ou terminale d'une maladie grave, chronique ou létale (3). La sédation pour détresse en phase terminale et dans des situations spécifiques et complexes en fin de vie.","s":"","r":"","a":0,"d":{}},{"n":"142","t":"Connaître les aspects spécifiques des soins palliatifs en pédiatrie.","s":"","r":"","a":0,"d":{}},{"n":"143","t":"Aspects spécifiques des soins palliatifs en réanimation","s":"ECNi","r":"Éthique et DSP","a":1,"d":{"J0":"2026-02-28"}},{"n":"144","t":"Deuil normal et pathologique","s":"Collège","r":"Éthique et DSP","a":1,"d":{"J0":"2026-06-27"}},{"n":"145","t":"Surveillance des maladies infectieuses transmissibles","s":"","r":"","a":0,"d":{}},{"n":"146","t":"Vaccinations","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-06-26","J1":"2026-07-08","J3":"2026-07-08","J7":"2026-07-24"}},{"n":"147","t":"Fièvre aiguë chez l'enfant et l'adulte","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-05-21","J1":"2026-05-22","J3":"2026-05-24","J7":"2026-06-05","J30":"2026-07-04"}},{"n":"148","t":"Infections naso-sinusiennes de l'adulte et de l'enfant","s":"ECNi","r":"ORL","a":1,"d":{"J0":"2026-03-25","J1":"2026-03-26","J3":"2026-03-27","J7":"2026-04-01","J14":"2026-04-08","J30":"2026-04-23","J60":"2026-05-23"}},{"n":"149","t":"Angines de l'adulte et de l'enfant et rhinopharyngites","s":"Collège","r":"ORL","a":1,"d":{"J0":"2026-07-11"}},{"n":"150","t":"Otites infectieuses de l'adulte et de l'enfant","s":"ECNi","r":"ORL","a":1,"d":{"J0":"2026-05-25","J1":"2026-05-26","J3":"2026-05-28","J7":"2026-06-01","J14":"2026-06-11","J30":"2026-07-10"}},{"n":"151","t":"Méningites, méningoencéphalites, abcès cérébral","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-06-02","J1":"2026-06-04","J3":"2026-06-06","J7":"2026-06-13","J14":"2026-06-26"}},{"n":"152","t":"Endocardite infectieuse","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-05-31","J1":"2026-06-01","J3":"2026-06-03","J7":"2026-05-07","J14":"2026-06-20"}},{"n":"153","t":"Surveillance des porteurs de valve et prothèses","s":"","r":"","a":0,"d":{}},{"n":"154","t":"Infections broncho pulmonaires communautaires","s":"ECNi","r":"Pneumo","a":1,"d":{"J0":"2026-06-30","J1":"2026-01-12"}},{"n":"155","t":"Cellulite faciale d'origine dentaire (infections cutanées)","s":"Mixte","r":"CMF","a":1,"d":{"J0":"2026-07-13"}},{"n":"155","t":"Infections cutanéo-muqueuses et des phanères","s":"Mixte","r":"Dermato","a":1,"d":{"J0":"2026-07-13"}},{"n":"156","t":"Infections ostéo articulaires (IOA)","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-06-30","J1":"2026-07-07","J3":"2026-07-07","J7":"2026-07-12"}},{"n":"157","t":"Septicémie et Bactériémie et Fongémie","s":"ECNi","r":"Infectio","a":0,"d":{"J0":"2026-03-02"}},{"n":"158","t":"Sepsis et choc septique de l’enfant et de l’adulte","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-04-01","J1":"2026-04-02","J3":"2026-04-04","J7":"2026-04-08","J14":"2026-04-16","J30":"2026-05-31"}},{"n":"159","t":"Tuberculose de l'adulte et de l'enfant","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-04-13","J1":"2026-04-14","J3":"2026-04-16","J7":"2026-04-21","J14":"2026-04-28","J30":"2026-06-16"}},{"n":"160","t":"Tétanos","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-06-01","J1":"2026-06-02","J3":"2026-06-04","J7":"2026-06-15","J14":"2026-06-22"}},{"n":"161","t":"Infection urinaire de l'enfant","s":"","r":"","a":0,"d":{}},{"n":"161","t":"Infections urinaires de l'adulte","s":"","r":"","a":0,"d":{}},{"n":"162","t":"Infections sexuellement transmissibles (IST)","s":"ECNi","r":"Dermato","a":1,"d":{"J0":"2026-07-13"}},{"n":"163","t":"Coqueluche","s":"ECNi","r":"Bactério","a":0,"d":{"J0":"2025-12-29","J1":"2026-01-03"}},{"n":"164","t":"Exanthèmes fébriles de l'enfant","s":"","r":"","a":0,"d":{}},{"n":"165","t":"Oreillons","s":"","r":"","a":0,"d":{}},{"n":"166","t":"Grippe","s":"ECNi","r":"MedG","a":1,"d":{"J0":"2026-05-20","J1":"2026-05-22","J3":"2026-05-24","J7":"2026-05-28","J14":"2026-06-05","J30":"2026-07-05"}},{"n":"167","t":"Hépatites virales","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-06-30","J1":"2026-07-07","J3":"2026-07-09"}},{"n":"168","t":"Infections à herpès virus du sujet immunocompétent","s":"","r":"","a":0,"d":{}},{"n":"169","t":"Infections à VIH","s":"ECNi","r":"Infectio","a":1,"d":{"J0":"2026-07-02","J1":"2026-01-19"}},{"n":"170","t":"Paludisme","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-06-10","J1":"2026-06-15","J3":"2026-06-17","J7":"2026-06-24","J14":"2026-07-11"}},{"n":"171","t":"Gale et pédiculose","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-07-01"}},{"n":"172","t":"Parasitoses digestives : giardiose, amoebose, téniasis, ascaridiose","s":"","r":"","a":0,"d":{}},{"n":"173","t":"Zoonoses","s":"","r":"","a":0,"d":{}},{"n":"174","t":"Pathologie infectieuse chez les migrants adultes et enfants","s":"","r":"","a":0,"d":{}},{"n":"175","t":"Voyage en pays tropical de l'adulte et de l'enfant : conseils avant le départ","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-02"}},{"n":"176","t":"Diarrhées infectieuses de l'adulte et de l'enfant → Fusion fiche 286","s":"","r":"","a":0,"d":{}},{"n":"177","t":"Prescription et surveillance des anti-infectieux chez l'adulte et l'enfant","s":"Collège","r":"Infectio","a":1,"d":{"J0":"2026-04-08","J1":"2026-04-09","J3":"2026-04-11","J7":"2026-04-15","J14":"2026-04-24","J30":"2026-06-10"}},{"n":"178","t":"Risques émergents, bioterrorisme, maladies hautement transmissibles","s":"","r":"","a":0,"d":{}},{"n":"179","t":"Risques sanitaires liés à l'eau et à l'alimentation. Toxi-infections","s":"","r":"","a":0,"d":{}},{"n":"180","t":"Risques sanitaires liés aux irradiations. Radioprotection","s":"","r":"","a":0,"d":{}},{"n":"181","t":"La sécurité sanitaire des produits destinés à l'homme. La veille sanitaire","s":"","r":"","a":0,"d":{}},{"n":"182","t":"Environnement professionnel et santé au travail","s":"Collège","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-06-10","J1":"2026-06-15","J3":"2026-06-17","J7":"2026-06-23","J14":"2026-07-11"}},{"n":"183","t":"Organisation de la médecine du travail. Prévention des risques","s":"Collège","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-06-23","J1":"2026-07-08","J3":"2026-07-08","J7":"2026-07-24"}},{"n":"184","t":"Accidents du travail et maladies professionnelles : définitions et enjeux","s":"Collège","r":"Médecine légale & travail","a":1,"d":{"J0":"2026-07-01"}},{"n":"185","t":"Réaction inflammatoire : aspects biologiques et cliniques. Conduite à tenir","s":"ECNi","r":"Immuno","a":1,"d":{"J0":"2026-05-21","J1":"2026-05-22","J3":"2026-05-24","J7":"2026-05-28","J14":"2026-06-05","J30":"2026-07-05"}},{"n":"186","t":"Hypersensibilités et allergies chez l'enfant et l'adulte : aspects immuno","s":"ECNi","r":"Allergologie","a":1,"d":{"J0":"2026-06-02","J1":"2026-06-03","J3":"2026-06-05","J7":"2026-06-11","J14":"2026-06-24"}},{"n":"187","t":"Hypersensibilités et allergies cutanéomuqueuses chez l'enfant et l'adulte. Urticaire, dermatites atopique et de contact, conjonctivite allergique","s":"Collège","r":"Dermato","a":1,"d":{"J0":"2026-06-11","J1":"2026-06-17","J3":"2026-06-19","J7":"2026-06-26","J14":"2026-07-12"}},{"n":"188","t":"Asthme, rhinite, hypersensibilité et allergies respiratoires chez l'enfant et chez l'adulte","s":"ECNi","r":"Pneumo","a":1,"d":{"J0":"2026-07-01"}},{"n":"189","t":"Déficit immunitaire","s":"","r":"","a":0,"d":{}},{"n":"190","t":"Fièvre prolongée","s":"Collège","r":"Med interne","a":1,"d":{"J0":"2026-06-22","J1":"2026-07-09","J3":"2026-07-09","J7":"2026-07-09"}},{"n":"191","t":"Fièvre chez un patient immunodéprimé","s":"","r":"","a":0,"d":{}},{"n":"192","t":"Pathologies auto-immunes : aspects épidémiologiques, diagnostiques et","s":"","r":"","a":0,"d":{}},{"n":"193","t":"Connaître les principaux types de vascularite systémique, les organes cibles, les outils diagnostiques et les moyens thérapeutiques","s":"","r":"","a":0,"d":{}},{"n":"194","t":"Lupus systémique. Syndrome des anti-phospholipides (SAPL)","s":"ECNi","r":"Med interne","a":1,"d":{"J0":"2026-07-02"}},{"n":"195","t":"Artérite à cellules géantes","s":"Collège","r":"Med interne","a":1,"d":{"J0":"2026-06-11","J1":"2026-06-18","J3":"2026-06-26","J7":"2026-07-12"}},{"n":"196","t":"Polyarthrite rhumatoïde","s":"","r":"","a":0,"d":{}},{"n":"197","t":"Spondyloarthrite","s":"Collège","r":"Rhumato","a":1,"d":{"J0":"2026-07-02"}},{"n":"198","t":"Arthropathie microcristalline","s":"","r":"","a":0,"d":{}},{"n":"199","t":"Syndrome douloureux régional complexe (ex algodystrophie)","s":"ECNi","r":"Douleur","a":1,"d":{"J0":"2026-04-28","J1":"2026-04-29","J3":"2026-05-01","J7":"2026-05-05","J14":"2026-05-29","J30":"2026-05-29","J60":"2026-07-23"}},{"n":"200","t":"Douleur et épanchement articulaire. Arthrite d'évolution récente","s":"ECNi","r":"Rhumatologie","a":1,"d":{"J0":"2026-06-02"}},{"n":"201","t":"Transplantation d'organes : aspects épidémiologiques et immunologiques ; principes de traitement; complications et pronostic ; aspects éthiques et légaux","s":"","r":"","a":0,"d":{}},{"n":"202","t":"Biothérapies et thérapies ciblées","s":"","r":"","a":0,"d":{}},{"n":"203","t":"Dyspnée aiguë et chronique","s":"","r":"","a":0,"d":{}},{"n":"204","t":"Toux chez l'enfant et chez l'adulte (avec le traitement)","s":"","r":"","a":0,"d":{}},{"n":"205","t":"Hémoptysie","s":"","r":"","a":0,"d":{}},{"n":"206","t":"Épanchement pleural liquidien","s":"ECNi","r":"Pneumo","a":1,"d":{"J0":"2026-05-12","J1":"2026-05-13","J3":"2026-05-15","J7":"2026-05-19","J14":"2026-05-27","J30":"2026-06-15"}},{"n":"207","t":"Opacités et masses intra-thoraciques chez l'enfant et chez l'adulte","s":"","r":"","a":0,"d":{}},{"n":"208","t":"Insuffisance respiratoire chronique","s":"Collège","r":"Pneumo","a":1,"d":{"J0":"2026-06-22","J1":"2026-07-09","J3":"2026-07-11"}},{"n":"209","t":"Bronchopneumopathie chronique obstructive chez l'adulte","s":"ECNi","r":"Pneumo","a":1,"d":{"J0":"2026-05-12","J1":"2026-05-13","J3":"2026-05-15","J7":"2026-05-19","J14":"2026-05-27","J30":"2026-06-15"}},{"n":"210","t":"Pneumopathie interstitielle diffuse","s":"","r":"","a":0,"d":{}},{"n":"211","t":"Sarcoïdose","s":"ECNi","r":"Med interne","a":1,"d":{"J0":"2026-05-12","J1":"2026-05-13","J3":"2026-05-15","J7":"2026-05-19","J14":"2026-05-27","J30":"2026-06-15"}},{"n":"212","t":"Hémogramme chez l'adulte et l'enfant : indications et interprétation","s":"ECNi","r":"Hémato","a":1,"d":{"J0":"2026-05-21","J1":"2026-05-22","J3":"2026-05-24","J7":"2026-05-28","J14":"2026-06-05","J30":"2026-07-04"}},{"n":"213","t":"Anémie chez l'adulte et l'enfant","s":"Collège","r":"Hémato","a":1,"d":{"J0":"2026-07-03"}},{"n":"214","t":"Thrombopénie chez l'adulte et l'enfant","s":"Collège","r":"Hémato","a":1,"d":{"J0":"2026-07-03"}},{"n":"215","t":"Purpuras chez l'adulte et l'enfant","s":"","r":"","a":0,"d":{}},{"n":"216","t":"Syndrome hémorragique d'origine hématologique","s":"","r":"","a":0,"d":{}},{"n":"217","t":"Syndrome mononucléosique","s":"","r":"","a":0,"d":{}},{"n":"218","t":"Éosinophilie","s":"","r":"","a":0,"d":{}},{"n":"219","t":"Pathologie du fer chez l'adulte et l'enfant","s":"","r":"","a":0,"d":{}},{"n":"220","t":"Adénopathie superficielle de l'adulte et de l'enfant","s":"","r":"","a":0,"d":{}},{"n":"221","t":"Athérome : épidémiologie et physiopathologie. Le malade poly- athéromateux","s":"ECNi","r":"Cardio","a":1,"d":{"J0":"2026-05-21","J1":"2026-05-22","J3":"2026-05-24","J7":"2026-05-28","J14":"2026-06-05","J30":"2026-07-04"}},{"n":"222","t":"Facteurs de risque cardio-vasculaire et prévention","s":"","r":"","a":0,"d":{}},{"n":"223","t":"Dyslipidémies","s":"ECNi","r":"Endocrino","a":1,"d":{"J0":"2026-06-13","J1":"2026-06-19","J3":"2026-06-22","J7":"2026-07-03","J14":"2026-07-24"}},{"n":"224","t":"Hypertension artérielle de l'adulte et de l’enfant","s":"","r":"","a":0,"d":{}},{"n":"224","t":"Rétinopathie Hypertensive","s":"","r":"","a":0,"d":{}},{"n":"225-1","t":"AOMI","s":"ECNi","r":"Chir vasc","a":1,"d":{"J0":"2026-04-07","J1":"2026-04-08","J3":"2026-04-10","J7":"2026-04-14","J14":"2026-04-22","J30":"2026-05-07","J60":"2026-05-06"}},{"n":"225-2","t":"Ischémie aiguë de membres","s":"ECNi","r":"Chir vasc","a":1,"d":{"J0":"2026-04-07","J1":"2026-04-08","J3":"2026-04-10","J7":"2026-04-14","J14":"2026-04-22","J30":"2026-05-07","J60":"2026-05-06"}},{"n":"225-3","t":"Anévrisme de l'aorte abdominale et de l'artère poplitée","s":"ECNi","r":"Chir vasc","a":1,"d":{"J0":"2026-04-07","J1":"2026-04-08","J3":"2026-04-10","J7":"2026-04-14","J14":"2026-04-22","J30":"2026-05-07","J60":"2026-05-06"}},{"n":"225-4","t":"Ischémie intestinal","s":"Collège","r":"Chir vasc","a":1,"d":{"J0":"2026-04-07","J1":"2026-04-08","J3":"2026-04-10","J7":"2026-04-14","J14":"2026-04-22","J60":"2026-05-06"}},{"n":"226","t":"Thrombose veineuse profonde et embolie pulmonaire","s":"Mixte","r":"Chir Vasc","a":1,"d":{"J0":"2026-04-29","J1":"2026-04-30","J3":"2026-05-02","J7":"2026-05-06","J14":"2026-05-14","J30":"2026-05-28"}},{"n":"227","t":"Insuffisance veineuse chronique, varices","s":"ECNi","r":"Chir Vasc","a":1,"d":{"J0":"2026-03-27","J1":"2026-03-28","J3":"2026-03-30","J7":"2026-04-04","J14":"2026-04-11","J30":"2026-04-27","J60":"2026-05-26"}},{"n":"228","t":"Ulcère de jambe","s":"ECNi","r":"Chir vasc","a":1,"d":{"J0":"2026-03-28","J1":"2026-03-29","J3":"2026-03-31","J7":"2026-04-05","J14":"2026-04-12","J30":"2026-04-28","J60":"2026-05-28"}},{"n":"229","t":"Surveillance et complications des abords veineux","s":"Collège","r":"MAR","a":0,"d":{"J0":"2026-03-04"}},{"n":"230","t":"Douleur thoracique aiguë (Dissection aortique)","s":"","r":"","a":0,"d":{}},{"n":"231","t":"Électrocardiogramme : indications et interprétations","s":"Collège","r":"Cardio","a":1,"d":{"J0":"2026-05-09","J1":"2026-05-10","J3":"2026-05-12","J7":"2026-05-15","J14":"2026-05-24"}},{"n":"232","t":"Fibrillation atriale","s":"ECNi","r":"Cardio","a":1,"d":{"J0":"2026-06-12","J1":"2026-06-18","J3":"2026-06-20","J7":"2026-06-30","J14":"2026-07-21"}},{"n":"233","t":"Valvulopathies: RA","s":"Collège","r":"Cardio","a":1,"d":{"J0":"2026-07-03"}},{"n":"233","t":"Valvulopathies: IAo","s":"Collège","r":"Cardio","a":1,"d":{"J0":"2026-07-03"}},{"n":"233","t":"Valvulopathies: RM","s":"Collège","r":"Cardio","a":1,"d":{"J0":"2026-07-03"}},{"n":"233","t":"Valvulopathies: IM","s":"Collège","r":"Cardio","a":1,"d":{"J0":"2026-07-03"}},{"n":"234","t":"Insuffisance cardiaque de l'adulte","s":"ECNi","r":"Cardio","a":1,"d":{"J0":"2026-06-13","J1":"2026-06-20","J3":"2026-06-21","J7":"2026-07-03","J14":"2026-07-24"}},{"n":"235","t":"Péricardite aiguë","s":"ECNi","r":"Cardio","a":1,"d":{"J0":"2026-06-03","J1":"2026-06-04","J3":"2026-06-06","J7":"2026-06-12","J14":"2026-06-26"}},{"n":"236","t":"Troubles de la conduction intracardiaque","s":"","r":"","a":0,"d":{}},{"n":"237","t":"Palpitations","s":"","r":"","a":0,"d":{}},{"n":"238","t":"Souffle cardiaque chez l'enfant","s":"","r":"","a":0,"d":{}},{"n":"239","t":"Acrosyndromes (phénomène de Raynaud, érythermalgie, acrocyanose, engelures, ischémie digitale)","s":"Collège","r":"Med interne","a":1,"d":{"J0":"2026-06-12","J1":"2026-06-18","J3":"2026-06-19","J7":"2026-06-30","J14":"2026-07-21"}},{"n":"240","t":"Hypoglycémie chez l'adulte et l'enfant","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-06-12","J1":"2026-06-18","J3":"2026-06-20","J7":"2026-06-30","J14":"2026-07-21"}},{"n":"241","t":"Goitre, nodules thyroïdiens et cancers thyroïdiens","s":"ECNi","r":"Endocrino","a":1,"d":{"J0":"2026-06-03","J1":"2026-06-04","J3":"2026-06-06","J7":"2026-06-13","J14":"2026-06-26"}},{"n":"242","t":"Hyperthyroïdie","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"243","t":"Hypothyroïdie","s":"","r":"","a":0,"d":{}},{"n":"244","t":"Adénome hypophysaire","s":"ECNi","r":"Endocrino","a":1,"d":{"J0":"2026-06-23","J1":"2026-07-10","J3":"2026-07-12"}},{"n":"245","t":"Insuffisance surrénale chez l'adulte et l'enfant","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-01"}},{"n":"246","t":"Gynécomastie","s":"","r":"","a":0,"d":{}},{"n":"247","t":"Diabète sucré de types 1 de l'enfant et de l'adulte","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"247","t":"Diabète sucré de type 2 de l'enfant et de l'adulte","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"247","t":"Diabète sucré: complications","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"247","t":"Néphropathie diabétique","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"247","t":"Rétinopathie diabétique","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-07-04"}},{"n":"248","t":"Prévention primaire par la nutrition chez l'adulte et chez l'enfant","s":"","r":"","a":0,"d":{}},{"n":"249","t":"Modifications thérapeutiques du mode de vie (alimentation et activité physique) chez l'adulte et l'enfant","s":"Collège","r":"Med G","a":1,"d":{"J0":"2026-06-14","J1":"2026-06-21","J3":"2026-06-23","J7":"2026-07-05"}},{"n":"250","t":"Dénutrition chez l'adulte et l'enfant","s":"","r":"","a":0,"d":{}},{"n":"251","t":"Amaigrissement à tous les âges","s":"","r":"","a":0,"d":{}},{"n":"252","t":"Troubles nutritionnels chez le sujet âgé","s":"","r":"","a":0,"d":{}},{"n":"253","t":"Obésité de l'enfant et de l'adulte (voir item 71)","s":"Collège","r":"Endocrino","a":1,"d":{"J0":"2026-06-22","J1":"2026-07-09","J3":"2026-07-10"}},{"n":"254","t":"Besoins nutritionnels et grossesse","s":"","r":"","a":0,"d":{}},{"n":"255","t":"Diabète gestationnel","s":"ECNi","r":"Gynéco","a":1,"d":{"J0":"2026-04-27","J1":"2026-04-28","J3":"2026-04-30","J7":"2026-05-06","J14":"2026-05-12","J30":"2026-05-28","J60":"2026-07-12"}},{"n":"256","t":"Aptitude au sport chez l'adulte et l'enfant; besoins nutritionnels chez le sportif (voir item 80)","s":"","r":"","a":0,"d":{}},{"n":"257","t":"Œdèmes des membres inférieurs localisés ou généralisés","s":"ECNi","r":"Néphro","a":1,"d":{"J0":"2026-06-23","J1":"2026-07-10","J3":"2026-07-11"}},{"n":"258","t":"Élévation de la créatininémie","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-05-08","J1":"2026-05-09","J3":"2026-05-11","J7":"2026-05-15","J14":"2026-05-23","J30":"2026-06-10"}},{"n":"259","t":"Protéinurie et syndrome néphrotique de chez l'l'adulte et de l'enfant.","s":"ECNi","r":"Néphro","a":1,"d":{"J0":"2026-06-13","J1":"2026-06-20","J3":"2026-06-22","J7":"2026-07-03","J14":"2026-07-24"}},{"n":"260","t":"Hématurie","s":"ECNi","r":"Uro","a":1,"d":{"J0":"2026-06-22","J1":"2026-07-09","J3":"2026-07-09"}},{"n":"261","t":"Néphropathie glomérulaire.","s":"","r":"","a":0,"d":{}},{"n":"262","t":"Néphropathies interstitielles","s":"","r":"","a":0,"d":{}},{"n":"263","t":"Néphropathies vasculaires","s":"","r":"","a":0,"d":{}},{"n":"264","t":"Insuffisance rénale chronique chez l'adulte et l'enfant","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-07-04"}},{"n":"265","t":"Lithiase urinaire","s":"Collège","r":"Uro","a":1,"d":{"J0":"2026-07-11"}},{"n":"266","t":"Polykystose rénale","s":"","r":"","a":0,"d":{}},{"n":"267a","t":"→ Dyskaliémies","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-07-12"}},{"n":"267b","t":"→ Dysnatrémies + hydratation","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-07-12"}},{"n":"267c","t":"→ Troubles acidobasiques","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-07-12"}},{"n":"268","t":"Hypercalcémie","s":"Collège","r":"Néphro","a":1,"d":{"J0":"2026-06-23","J1":"2026-07-10","J3":"2026-07-11"}},{"n":"269","t":"Douleurs abdominales aiguës chez l'enfant et chez l'adulte","s":"","r":"","a":0,"d":{}},{"n":"270","t":"Douleurs lombaires aiguës chez l'enfant et chez l'adulte","s":"","r":"","a":0,"d":{}},{"n":"271","t":"Reflux gastro-œsophagien chez le nourrisson, chez l'enfant et chez l'adulte. Hernie hiatale","s":"","r":"","a":0,"d":{}},{"n":"272","t":"Ulcère gastrique et duodénal. Gastrite","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-05-22","J1":"2026-05-23","J3":"2026-05-25","J7":"2026-05-30","J14":"2026-06-06","J30":"2026-07-06"}},{"n":"273","t":"Dysphagie","s":"","r":"","a":0,"d":{}},{"n":"274","t":"Vomissements du nourrisson, de l'enfant et de l'adulte.","s":"","r":"","a":0,"d":{}},{"n":"275","t":"Splénomégalie","s":"","r":"","a":0,"d":{}},{"n":"276","t":"Hépatomégalie et masse abdominale.","s":"","r":"","a":0,"d":{}},{"n":"277","t":"Lithiase biliaire et complications.","s":"","r":"","a":0,"d":{}},{"n":"278","t":"Ictère","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-04-02","J1":"2026-04-03","J3":"2026-04-05","J7":"2026-04-11","J14":"2026-04-17","J30":"2026-05-02","J60":"2026-06-01"}},{"n":"278","t":"Ictère néonatal","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-04-02","J1":"2026-04-03","J3":"2026-04-05","J7":"2026-04-11","J14":"2026-04-17","J30":"2026-05-02","J60":"2026-06-01"}},{"n":"279","t":"Cirrhose et complications","s":"Collège","r":"Gastro-entéro","a":1,"d":{"J0":"2026-07-05"}},{"n":"280","t":"Ascite","s":"","r":"","a":0,"d":{}},{"n":"281","t":"Pancréatite chronique","s":"","r":"","a":0,"d":{}},{"n":"282","t":"Maladies Inflammatoires Chroniques de l'Intestin (MICI) chez l'adulte","s":"","r":"","a":0,"d":{}},{"n":"283","t":"Constipation chez l'enfant et l'adulte (avec le traitement)","s":"","r":"","a":0,"d":{}},{"n":"284","t":"Colopathie fonctionnelle","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-06-02","J1":"2026-06-03","J3":"2026-06-05","J7":"2026-06-11","J14":"2026-06-24"}},{"n":"285","t":"Diarrhée chronique chez l'adulte et l'enfant","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-06-23","J1":"2026-07-10","J3":"2026-07-12"}},{"n":"286","t":"Diarrhée aiguë et déshydratation chez le nourrisson, l'enfant et l'adulte → Fusion fiche 176","s":"","r":"","a":0,"d":{}},{"n":"287","t":"Diverticulose colique et diverticulite aiguë du sigmoïde","s":"","r":"","a":0,"d":{}},{"n":"288","t":"Pathologie hémorroïdaire","s":"","r":"","a":0,"d":{}},{"n":"289","t":"Hernie pariétale chez l'enfant et l'adulte","s":"","r":"","a":0,"d":{}},{"n":"290","t":"Épidémiologie, facteurs de risque, prévention et dépistage des cancers","s":"Collège","r":"Med G","a":1,"d":{"J0":"2026-06-04","J1":"2026-06-06","J3":"2026-05-07","J7":"2026-06-14","J14":"2026-06-30"}},{"n":"291","t":"Cancer : cancérogénèse, oncogénétique","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-25","J7":"2026-07-07"}},{"n":"292","t":"Diagnostic des cancers : signes d'appel et investigations para-cliniques ; caractérisation du stade ; pronostic","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-05-07","J1":"2026-05-08","J3":"2026-05-10","J7":"2026-05-14","J14":"2026-06-10"}},{"n":"293","t":"Anapath : Le médecin préleveur de cellules et et ou de tissus pour des examens d'Anatomie et Cytologie Pathologiques : connaître les principes de réalisation,","s":"Collège","r":"Anapath","a":1,"d":{"J0":"2026-04-29","J1":"2026-04-30","J3":"2026-05-02","J7":"2026-05-06","J14":"2026-05-14","J30":"2026-06-01"}},{"n":"294","t":"Traitement des cancers : principales modalités, classes thérapeutiques et leurs complications majeures. La décision thérapeutique pluridisciplinaire et l'information du malade","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-25","J7":"2026-07-07"}},{"n":"294","t":"→ Biothérapies, hormonothérapies","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-25","J7":"2026-07-07"}},{"n":"294","t":"→ Radiothérapie","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-25","J7":"2026-07-07"}},{"n":"294","t":"→ Chimiothérapies","s":"Collège","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-25","J7":"2026-07-07"}},{"n":"295","t":"Prise en charge et accompagnement d'un malade atteint de cancer à tous les stades de la maladie dont le stade de soins palliatifs en abordant les problématiques techniques, relationnelles, sociales et éthiques. Traitements symptomatiques. Modalités de surveillance.","s":"","r":"","a":0,"d":{}},{"n":"296","t":"Agranulocytose médicamenteuse : conduite à tenir","s":"ECNi","r":"Oncologie","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-07-08"}},{"n":"297","t":"Cancer de l'enfant : particularités épidémiologiques, diagnostiques et.","s":"","r":"","a":0,"d":{}},{"n":"298","t":"Tumeurs de la cavité buccale, naso-sinusiennes et du cavum, et des voies aérodigestives supérieures","s":"Collège","r":"ORL","a":1,"d":{"J0":"2026-07-06"}},{"n":"299","t":"Tumeurs intracrâniennes","s":"","r":"","a":0,"d":{}},{"n":"300","t":"Tumeurs du col utérin, tumeur du corps utérin","s":"","r":"","a":0,"d":{}},{"n":"301","t":"Tumeurs du colon et du rectum","s":"","r":"","a":0,"d":{}},{"n":"302","t":"Tumeurs cutanées, épithéliales et mélaniques","s":"ECNi","r":"","a":1,"d":{"J0":"2026-06-24","J1":"2026-07-11","J3":"2026-07-21"}},{"n":"303","t":"Tumeurs de l'estomac","s":"","r":"","a":0,"d":{}},{"n":"304","t":"Tumeurs du foie, primitives et secondaires","s":"","r":"","a":0,"d":{}},{"n":"305","t":"Tumeurs de l'œsophage","s":"","r":"","a":0,"d":{}},{"n":"306","t":"Tumeurs de l'ovaire","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-06-24","J1":"2026-07-11","J3":"2026-07-21","J7":"2026-07-21"}},{"n":"307","t":"Tumeurs des os primitives et secondaires","s":"ECNi","r":"Rhumato","a":1,"d":{"J0":"2026-04-18","J1":"2026-04-19","J3":"2026-04-21","J7":"2026-04-25","J14":"2026-05-03","J30":"2026-05-18","J60":"2026-06-24"}},{"n":"308","t":"Tumeurs du pancréas","s":"","r":"","a":0,"d":{}},{"n":"309","t":"Tumeurs du poumon, primitives et secondaires","s":"Collège","r":"Onco","a":1,"d":{"J0":"2026-07-05"}},{"n":"310","t":"Tumeurs de la prostate","s":"Collège","r":"Onco","a":1,"d":{"J0":"2026-07-06"}},{"n":"311","t":"Tumeurs du rein de l’adulte","s":"","r":"","a":0,"d":{}},{"n":"312","t":"Tumeurs du sein.","s":"Collège","r":"Gynéco","a":1,"d":{"J0":"2026-06-04","J1":"2026-06-06","J3":"2026-05-07","J7":"2026-06-14","J14":"2026-06-30"}},{"n":"313","t":"Tumeurs du testicule","s":"","r":"","a":0,"d":{}},{"n":"314","t":"Tumeurs vésicales","s":"ECNi","r":"Uro","a":1,"d":{"J0":"2026-05-22","J1":"2026-05-23","J3":"2026-05-25","J7":"2026-05-30","J14":"2026-06-06","J30":"2026-07-06"}},{"n":"315","t":"Leucémies aiguës","s":"ECNi","r":"Hémato","a":1,"d":{"J0":"2026-05-25","J1":"2026-05-26","J3":"2026-05-28","J7":"2026-06-01","J14":"2026-07-10"}},{"n":"316","t":"Syndromes myélodysplasiques","s":"ECNi","r":"Hémato","a":1,"d":{"J0":"2026-05-25","J1":"2026-05-26","J3":"2026-05-28","J7":"2026-06-01","J14":"2026-07-10"}},{"n":"317","t":"Syndromes myéloprolifératifs","s":"Collège","r":"Hémato","a":1,"d":{"J0":"2026-07-07"}},{"n":"318","t":"Leucémies lymphoïdes chroniques","s":"ECNi","r":"Hémato","a":1,"d":{"J0":"2026-06-24","J1":"2026-07-11","J3":"2026-07-12"}},{"n":"319","t":"Lymphomes malins","s":"","r":"","a":0,"d":{}},{"n":"320","t":"Myélome multiple des os","s":"","r":"","a":0,"d":{}},{"n":"321","t":"Principe du bon usage du médicament.","s":"Collège","r":"BUM","a":1,"d":{"J0":"2026-06-24","J1":"2026-07-11","J3":"2026-07-12"}},{"n":"322","t":"La décision thérapeutique personnalisée : bon usage dans des situations à risque.","s":"","r":"","a":0,"d":{}},{"n":"323","t":"Analyser et utiliser les résultats des études cliniques dans la perspective du bon usage - analyse critique, recherche clinique et niveaux de preuve (voir item 3)","s":"Collège","r":"BUM","a":1,"d":{"J0":"2026-06-06","J1":"2026-06-10","J3":"2026-06-13","J7":"2026-06-17","J14":"2026-07-06"}},{"n":"324","t":"Éducation thérapeutique, observance et automédication.","s":"","r":"","a":0,"d":{}},{"n":"325","t":"Identification et gestion des risques liés aux médicaments et aux biomatériaux, risque iatrogène, erreur médicamenteuse (voir item 4 et item 5).","s":"","r":"","a":0,"d":{}},{"n":"326","t":"Cadre réglementaire de la prescription thérapeutique et recommandations.","s":"","r":"","a":0,"d":{}},{"n":"327","t":"Principes de la médecine intégrative, utilité et risques.","s":"","r":"","a":0,"d":{}},{"n":"328","t":"Thérapeutiques non médicamenteuses et dispositifs médicaux","s":"Collège","r":"MPR","a":1,"d":{"J0":"2026-06-15","J1":"2026-06-23","J3":"2026-06-23","J7":"2026-07-08"}},{"n":"329","t":"Transfusion sanguine et produits dérivés du sang : indications","s":"Collège","r":"Hémato","a":1,"d":{"J0":"2026-07-07"}},{"n":"330","t":"Prescription et surveillance des anticoagulants","s":"","r":"","a":0,"d":{}},{"n":"330","t":"Prescription et surveillance des classes de médicaments les plus courantes chez l'adulte et chez l'enfant, hors anti-infectieux (voir item 174). Connaitre les grands principes thérapeutiques.","s":"","r":"","a":0,"d":{}},{"n":"331","t":"Arrêt cardio-circulatoire","s":"ECNi","r":"MMU","a":1,"d":{"J0":"2026-05-10","J1":"2026-05-11","J3":"2026-05-13","J7":"2026-05-17","J14":"2026-05-25"}},{"n":"332","t":"État de choc","s":"Collège","r":"MMU","a":1,"d":{"J0":"2026-07-07"}},{"n":"332","t":"Choc Hypovolémique","s":"Collège","r":"MMU","a":1,"d":{"J0":"2026-07-07"}},{"n":"332","t":"Choc cardiogénique","s":"Collège","r":"MMU","a":1,"d":{"J0":"2026-07-07"}},{"n":"333","t":"Situations exceptionnelles","s":"","r":"","a":0,"d":{}},{"n":"334","t":"Prise en charge immédiate pré-hospitalière","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-07"}},{"n":"334","t":"↳ Polytrauma PEC","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-07"}},{"n":"334","t":"↳ TC","s":"","r":"","a":0,"d":{}},{"n":"334","t":"↳ Traumatisme rachidien","s":"","r":"","a":0,"d":{}},{"n":"334","t":"↳ Traumatisme thoracique","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-07"}},{"n":"334","t":"↳ Brulûres","s":"Collège","r":"","a":1,"d":{"J0":"2026-07-07"}},{"n":"334","t":"↳ Fractures des membres et complications","s":"","r":"","a":0,"d":{}},{"n":"334","t":"↳ Traumatisme vasculaire","s":"","r":"","a":0,"d":{}},{"n":"334","t":"↳ Traumatismes abdominopelvien","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-07"}},{"n":"335","t":"Orientation diagnostique et conduite à tenir devant un traumatisme maxillo-facial","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"↳ PEC traumatisé craniofacial","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"↳ Parties molles","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"↳ Mandibule","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"↳ Dents","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"↳ Etage moyen","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"Traumato / brûlures OPH","s":"Collège","r":"CMF","a":1,"d":{"J0":"2026-07-08"}},{"n":"335","t":"Fracture du rocher","s":"Collège","r":"ORL","a":1,"d":{"J0":"2026-07-08"}},{"n":"336","t":"Coma non traumatique chez l'adulte et chez l'enfant","s":"Collège","r":"MMU","a":1,"d":{"J0":"2026-05-11","J1":"2026-05-12","J3":"2026-05-14","J7":"2026-05-18","J14":"2026-05-26","J30":"2026-06-14"}},{"n":"337","t":"Principales intoxications aiguës","s":"Collège","r":"MMU","a":1,"d":{"J0":"2026-07-13"}},{"n":"338","t":"Œdème de Quincke et anaphylaxie","s":"","r":"","a":0,"d":{}},{"n":"339","t":"Syndromes coronariens aigus","s":"","r":"","a":0,"d":{}},{"n":"340","t":"Accidents vasculaires cérébraux","s":"Collège","r":"Neuro","a":1,"d":{"J0":"2026-07-03"}},{"n":"341","t":"Hémorragie méningée","s":"","r":"","a":0,"d":{}},{"n":"342","t":"Malaise, perte de connaissance, crise convulsive chez l'adulte (voir item 105)","s":"","r":"","a":0,"d":{}},{"n":"343","t":"État confusionnel et trouble de conscience chez l'adulte et chez l'enfant","s":"","r":"","a":0,"d":{}},{"n":"344","t":"Prise en charge d'une patiente atteinte de pré-éclampsie","s":"","r":"","a":0,"d":{}},{"n":"345","t":"Malaise grave du nourrisson et mort inattendue du nourrisson","s":"","r":"","a":0,"d":{}},{"n":"346","t":"Convulsions chez le nourrisson et chez l’enfant → Fiche fusion avec 105","s":"","r":"","a":0,"d":{}},{"n":"347","t":"Rétention aiguë d'urine","s":"","r":"","a":0,"d":{}},{"n":"348","t":"Insuffisance rénale aiguë - Anurie","s":"ECNi","r":"MMU","a":1,"d":{"J0":"2026-05-25","J1":"2026-05-25","J3":"2026-05-30","J7":"2026-06-02","J14":"2026-06-13","J30":"2026-07-11"}},{"n":"349","t":"Infection aiguë des parties molles (abcès, panaris, phlegmon des gaines).","s":"","r":"","a":0,"d":{}},{"n":"350","t":"Grosse jambe rouge aiguë","s":"","r":"","a":0,"d":{}},{"n":"351","t":"Agitation et délire aiguë","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2025-04-13","J1":"2025-04-14","J3":"2025-04-16","J7":"2026-04-21","J14":"2026-04-28","J30":"2026-05-13","J60":"2026-06-16"}},{"n":"352","t":"Crise d'angoisse aiguë et attaque de panique","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-04-28","J1":"2026-04-29","J7":"2026-05-05","J14":"2026-05-28","J30":"2026-07-23"}},{"n":"353","t":"Risque et conduite suicidaires","s":"ECNi","r":"Psy","a":1,"d":{"J0":"2026-05-12","J1":"2026-05-13","J3":"2026-05-15","J7":"2026-05-28","J14":"2026-06-15"}},{"n":"354","t":"Syndrome occlusif de l'enfant et de l'adulte","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-06-16","J1":"2026-06-24","J3":"2026-06-30"}},{"n":"355","t":"Hémorragie digestive","s":"","r":"","a":0,"d":{}},{"n":"356","t":"Appendicite de l'enfant et de l'adulte","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-06-16","J1":"2026-06-25","J3":"2026-07-08"}},{"n":"357","t":"Péritonite aiguë chez l'enfant et chez l'adulte","s":"","r":"","a":0,"d":{}},{"n":"358","t":"Pancréatite aiguë","s":"ECNi","r":"Gastro-entéro","a":1,"d":{"J0":"2026-06-25","J1":"2026-07-21","J3":"2026-07-23"}},{"n":"359","t":"Détresse et insuffisance respiratoire aigüe","s":"","r":"","a":0,"d":{}},{"n":"360","t":"Pneumothorax","s":"ECNi","r":"Pneumo","a":1,"d":{"J0":"2026-05-16","J1":"2026-05-17","J3":"2026-05-19","J7":"2026-05-23","J14":"2026-05-31","J30":"2026-06-21"}},{"n":"361","t":"Lésions péri-articulaires et ligamentaires","s":"ECNi","r":"Chir ortho","a":1,"d":{"J0":"2026-06-05","J1":"2026-05-06","J3":"2026-06-10","J7":"2026-06-16","J14":"2026-07-03"}},{"n":"361","t":"↳ Genou","s":"ECNi","r":"Chir ortho","a":1,"d":{"J0":"2026-06-05","J1":"2026-05-06","J3":"2026-06-10","J7":"2026-06-16","J14":"2026-07-03"}},{"n":"361","t":"↳ Cheville","s":"ECNi","r":"Chir ortho","a":1,"d":{"J0":"2026-06-05","J1":"2026-05-06","J3":"2026-06-10","J7":"2026-06-16","J14":"2026-07-03"}},{"n":"361","t":"↳ Epaule","s":"ECNi","r":"Chir ortho","a":1,"d":{"J0":"2026-06-05","J1":"2026-05-06","J3":"2026-06-10","J7":"2026-06-16","J14":"2026-07-03"}},{"n":"362","t":"Prothèses et ostéosynthèses","s":"ECNi","r":"Chir ortho","a":1,"d":{"J0":"2026-06-05","J1":"2026-05-06","J3":"2026-06-10","J7":"2026-06-16","J14":"2026-07-03"}},{"n":"363","t":"Fractures fréquentes de l'adulte et du sujet âgé","s":"Collège","r":"Chir ortho","a":1,"d":{"J0":"2026-06-16","J1":"2026-06-25","J3":"2026-07-08"}},{"n":"364","t":"Fractures chez l'enfant : particularités épidémiologiques, diagnostiques et thérapeutiques","s":"Collège","r":"Pédia","a":1,"d":{"J0":"2026-06-25","J1":"2026-06-29","J3":"2026-07-21","J7":"2026-07-21"}},{"n":"364","t":"↳ Cheville","s":"Collège","r":"","a":1,"d":{"J0":"2026-06-25","J1":"2026-06-29","J3":"2026-07-21","J7":"2026-07-21"}},{"n":"365","t":"Surveillance d'un malade sous plâtre et résine, diagnostiquer une complication","s":"","r":"","a":0,"d":{}},{"n":"366","t":"Exposition accidentelle aux liquides biologiques : conduite à tenir","s":"","r":"","a":0,"d":{}},{"n":"367","t":"Impact de l’environnement sur la santé","s":"","r":"","a":0,"d":{}},{"n":"407","t":"Diurétiques","s":"","r":"Néphro","a":0,"d":{}},{"n":"X","t":"Oxygénothérapie","s":"Collège","r":"X","a":1,"d":{"J0":"2026-02-28"}},{"n":"X","t":"Solutés d'hydratations","s":"Collège","r":"X","a":1,"d":{"J0":"2026-03-01"}}],"notes":["Item 104 Sclérose en plaques J7 : année corrigée, 2027-04-01 lu comme 2026-04-01","Item 104 Sclérose en plaques J14 : année corrigée, 2027-04-08 lu comme 2026-04-08","Item 148 Infections naso-sinusien J7 : année corrigée, 2027-04-01 lu comme 2026-04-01","Item 225-1 AOMI J1 : année corrigée, 2028-04-08 lu comme 2026-04-08","Item 225-1 AOMI J3 : année corrigée, 2028-04-10 lu comme 2026-04-10","Item 225-1 AOMI J7 : année corrigée, 2028-04-14 lu comme 2026-04-14","Item 225-2 Ischémie aiguë de membre J0 : année corrigée, 2027-04-07 lu comme 2026-04-07","Item 225-2 Ischémie aiguë de membre J1 : année corrigée, 2028-04-08 lu comme 2026-04-08","Item 225-2 Ischémie aiguë de membre J3 : année corrigée, 2028-04-10 lu comme 2026-04-10","Item 225-2 Ischémie aiguë de membre J7 : année corrigée, 2028-04-14 lu comme 2026-04-14","Item 225-3 Anévrisme de l'aorte abd J0 : année corrigée, 2027-04-07 lu comme 2026-04-07","Item 225-3 Anévrisme de l'aorte abd J1 : année corrigée, 2028-04-08 lu comme 2026-04-08","Item 225-3 Anévrisme de l'aorte abd J3 : année corrigée, 2028-04-10 lu comme 2026-04-10","Item 225-3 Anévrisme de l'aorte abd J7 : année corrigée, 2028-04-14 lu comme 2026-04-14","Item 225-4 Ischémie intestinal J0 : année corrigée, 2027-04-07 lu comme 2026-04-07","Item 225-4 Ischémie intestinal J1 : année corrigée, 2028-04-08 lu comme 2026-04-08","Item 225-4 Ischémie intestinal J3 : année corrigée, 2028-04-10 lu comme 2026-04-10","Item 225-4 Ischémie intestinal J7 : année corrigée, 2028-04-14 lu comme 2026-04-14","Item 228 Ulcère de jambe J1 : année corrigée, 2027-03-29 lu comme 2026-03-29","Item 352 Crise d'angoisse aiguë e J3 : date impossible 31/04/2026, ignorée","Item 091 : J7 (2026-05-06) est antérieur à J3 (2026-06-01)","Item 097 : J7 (2026-05-06) est antérieur à J3 (2026-06-02)","Item 152 : J7 (2026-05-07) est antérieur à J3 (2026-06-03)","Item 154 : J1 (2026-01-12) est antérieur à J0 (2026-06-30)","Item 169 : J1 (2026-01-19) est antérieur à J0 (2026-07-02)","Item 225-1 : J60 (2026-05-06) est antérieur à J30 (2026-05-07)","Item 225-2 : J60 (2026-05-06) est antérieur à J30 (2026-05-07)","Item 225-3 : J60 (2026-05-06) est antérieur à J30 (2026-05-07)","Item 290 : J3 (2026-05-07) est antérieur à J1 (2026-06-06)","Item 312 : J3 (2026-05-07) est antérieur à J1 (2026-06-06)","Item 361 : J1 (2026-05-06) est antérieur à J0 (2026-06-05)","Item 361 : J1 (2026-05-06) est antérieur à J0 (2026-06-05)","Item 361 : J1 (2026-05-06) est antérieur à J0 (2026-06-05)","Item 361 : J1 (2026-05-06) est antérieur à J0 (2026-06-05)","Item 362 : J1 (2026-05-06) est antérieur à J0 (2026-06-05)"],"source":"2000EXTERNAT","built":"2026-07-24"}</script>
+<script>
+"use strict";
+
+/* ================= échelle des J ================= */
+
+const STAGES = [
+  { k:"J0",  off:0,  tol:0, col:"#2B2D5E", fg:"#fff",     act:"Cours + conversion Anki" },
+  { k:"J1",  off:1,  tol:0, col:"#354499", fg:"#fff",     act:"/2 ECNi" },
+  { k:"J3",  off:3,  tol:1, col:"#3A62AE", fg:"#fff",     act:"1/2 ECNi" },
+  { k:"J7",  off:7,  tol:2, col:"#3B81B4", fg:"#fff",     act:"25 Q max ECNi, si moins de 85% alors tout + DP" },
+  { k:"J14", off:14, tol:3, col:"#3E9CA8", fg:"#fff",     act:"Annale" },
+  { k:"J30", off:30, tol:5, col:"#48AE93", fg:"#fff",     act:"TOUS LES ANKIS / cours" },
+  { k:"J45", off:45, tol:6, col:"#6BC079", fg:"#0d1a15",  act:"" },
+  { k:"J60", off:60, tol:7, col:"#A9CF63", fg:"#0d1a15",  act:"ECNi 25 questions" }
+];
+const SI = {}; STAGES.forEach((s,i) => SI[s.k] = i);
+const DOW = ["lun","mar","mer","jeu","ven","sam","dim"];
+const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+
+/* ================= dates ================= */
+
+const MS = 86400000;
+function today(){ const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12); }
+function fromIso(s){ return new Date(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10), 12); }
+function addDays(d,n){ const x = new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
+function diffDays(a,b){ return Math.round((a-b)/MS); }
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fr(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+function frShort(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"); }
+function longFr(d){ return DOW[dowIdx(d)]+". "+d.getDate()+" "+MONTHS[d.getMonth()]; }
+function dowIdx(d){ return (d.getDay()+6)%7; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function el(id){ return document.getElementById(id); }
+
+/* ================= état ================= */
+
+const RAW = JSON.parse(el("dataset").textContent);
+const KEY = "methode-des-j-edn";
+let S = null;
+
+function keepScale(d){
+  const out = {};
+  for(const k in d){ if(k in SI) out[k] = d[k]; }
+  return out;
+}
+
+function freshState(){
+  return {
+    v: 1,
+    items: RAW.items.map((it,i) => ({
+      id: i, num: it.n, nom: it.t, sup: it.s || "", ref: it.r || "Sans collège",
+      anki: !!it.a, done: keepScale(it.d), plan: null, off: false
+    })),
+    acts: STAGES.map(s => s.act),
+    tols: STAGES.map(s => s.tol),
+    caps: [12,12,12,12,12,8,8],
+    capOv: {},
+    startIso: iso(today()),
+    horizon: 90
+  };
+}
+
+let STORAGE_OK = true;
+
+async function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ S = JSON.parse(raw); return; }
+  }catch(e){
+    STORAGE_OK = false;
+    console.warn("stockage local indisponible sur cette page :", e);
+  }
+  S = freshState();
+}
+async function save(quiet){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(S));
+    STORAGE_OK = true;
+    if(!quiet) toast("Sauvegardé sur cet appareil.");
+  }catch(e){
+    STORAGE_OK = false;
+    if(!quiet) toast("Sauvegarde automatique impossible dans ce navigateur, utilise Sauvegarder dans un fichier.");
+  }
+}
+
+/* ================= dérivation ================= */
+
+function lastIdx(it){
+  let m = -1;
+  for(const k in it.done){ if(SI[k] > m) m = SI[k]; }
+  return m;
+}
+function anchor(it){
+  if(it.done.J0) return fromIso(it.done.J0);
+  if(it.plan) return fromIso(it.plan);
+  return null;
+}
+function nextStage(it){
+  const li = lastIdx(it);
+  return li >= STAGES.length-1 ? null : li+1;
+}
+function dueOf(it, si){
+  const a = anchor(it);
+  if(!a) return null;
+  let d = addDays(a, STAGES[si].off);
+  const li = lastIdx(it);
+  if(li >= 0 && si > li && it.done[STAGES[li].k]){
+    const rel = addDays(fromIso(it.done[STAGES[li].k]), STAGES[si].off - STAGES[li].off);
+    if(rel > d) d = rel;
+  }
+  return d;
+}
+
+/* La date théorique reste ancrée sur le J0, comme dans ton tableur. Mais après un
+   rattrapage tardif, l'intervalle qui sépare deux J est reconduit à partir de la
+   date réelle, sinon toute la chaîne d'un item en retard s'écrase sur quelques
+   jours et la méthode ne veut plus rien dire. */
+function nextDue(anchorD, prevSi, prevDate, si){
+  const theo = addDays(anchorD, STAGES[si].off);
+  const rel = addDays(prevDate, STAGES[si].off - STAGES[prevSi].off);
+  return rel > theo ? rel : theo;
+}
+
+function schedule(){
+  const start = fromIso(S.startIso);
+
+  // ce qui a déjà été validé un jour donné consomme la capacité de ce jour
+  const spent = {};
+  S.items.forEach(it => { for(const k in it.done){ spent[it.done[k]] = (spent[it.done[k]]||0) + 1; } });
+  const capFor = d => {
+    const k = iso(d);
+    const base = (k in S.capOv) ? S.capOv[k] : S.caps[dowIdx(d)];
+    return Math.max(0, base - (spent[k]||0));
+  };
+
+  const deadline = t => addDays(t.due, S.tols[t.si]).getTime();
+
+  // un seul J vivant par item à la fois, le suivant naît quand celui-ci est placé
+  let future = [];
+  S.items.forEach(it => {
+    if(it.off) return;
+    const a = anchor(it);
+    if(!a) return;
+    const li = lastIdx(it);
+    if(li >= STAGES.length-1) return;
+    const si = li + 1;
+    const due = li < 0 ? addDays(a, STAGES[si].off)
+                       : nextDue(a, li, fromIso(it.done[STAGES[li].k]), si);
+    future.push({ it, si, due, anc:a });
+  });
+
+  let queue = [], day = start, guard = 0;
+  const days = [], limit = S.horizon + 40;
+
+  while(guard < limit && (future.length || queue.length)){
+    guard++;
+    const later = [];
+    for(const t of future){ if(t.due <= day) queue.push(t); else later.push(t); }
+    future = later;
+
+    const cap = capFor(day);
+    queue.sort((a,b) => deadline(a) - deadline(b) || a.si - b.si || a.due - b.due || a.it.id - b.it.id);
+    const picked = queue.slice(0, cap);
+    queue = queue.slice(cap);
+
+    picked.forEach(t => {
+      t.day = day;
+      t.late = Math.max(0, diffDays(day, t.due));
+      t.status = t.late === 0 ? "ok" : (t.late <= S.tols[t.si] ? "shift" : "over");
+      const ns = t.si + 1;
+      if(ns < STAGES.length){
+        future.push({ it:t.it, si:ns, due: nextDue(t.anc, t.si, day, ns), anc:t.anc });
+      }
+    });
+
+    days.push({ date:day, cap, items:picked, overflow: queue.length, free: Math.max(0, cap - picked.length) });
+    day = addDays(day, 1);
+  }
+
+  const placed = [], plan = {};
+  days.forEach(d => d.items.forEach(t => {
+    placed.push(t);
+    (plan[t.it.id] = plan[t.it.id] || {})[t.si] = t.day;
+  }));
+  return { days, placed, plan, remaining: future.length + queue.length };
+}
+
+/* ================= vue ================= */
+
+let VIEW = null, TAB = "agenda", DETAIL = null;
+const RES = { q:"", sup:"", ref:"", sel:new Set(), date:null };
+const RET = { sel:new Set() };
+
+function refresh(persist){
+  VIEW = schedule();
+  renderHead();
+  renderTabs();
+  renderAgenda();
+  renderRetards();
+  renderReserve();
+  renderCouverture();
+  if(persist !== false) save(true);
+}
+
+function overdueItems(){
+  const t0 = fromIso(S.startIso);
+  const out = [];
+  S.items.forEach(it => {
+    if(it.off) return;
+    const ns = nextStage(it);
+    if(ns === null) return;
+    const d = dueOf(it, ns);
+    if(d && d < t0) out.push({ it, si:ns, due:d, late: diffDays(t0, d) });
+  });
+  out.sort((a,b) => b.late - a.late);
+  return out;
+}
+function reserveItems(){
+  return S.items.filter(it => !it.off && !it.done.J0 && !it.plan);
+}
+function plannedNotDone(){
+  return S.items.filter(it => !it.off && !it.done.J0 && it.plan);
+}
+
+function renderHead(){
+  const t0 = fromIso(S.startIso);
+  el("todayBox").innerHTML = "<b>"+longFr(today())+"</b>"+fr(today());
+
+  const started = S.items.filter(it => it.done.J0).length;
+  const finished = S.items.filter(it => lastIdx(it) === STAGES.length-1).length;
+  const od = overdueItems().length;
+  const doneCount = S.items.reduce((n,it) => n + Object.keys(it.done).length, 0);
+  const totalRev = S.items.length * STAGES.length;
+  const active = VIEW.days.filter(d => d.items.length);
+  const peak = active.length ? Math.max(...active.map(d => d.items.length)) : 0;
+
+  const figs = [
+    { v: started+" / "+S.items.length, l:"items démarrés" },
+    { v: od, l:"items en retard", hot: od>0 },
+    { v: reserveItems().length, l:"items en réserve" },
+    { v: doneCount, l:"J validés" },
+    { v: (totalRev-doneCount), l:"J restants" },
+    { v: peak, l:"pic sur une journée" },
+    { v: finished, l:"items bouclés à J60" }
+  ];
+  el("figures").innerHTML = figs.map(f =>
+    '<div class="fig'+(f.hot?" hot":"")+'"><b>'+f.v+'</b><span>'+f.l+'</span></div>').join("");
+  renderRibbon();
+}
+
+function renderRibbon(){
+  const days = VIEW.days.slice(0, S.horizon);
+  const scale = Math.max(1, ...days.map(d => Math.max(d.cap, d.items.length)));
+  let bars = "", axis = "", lm = -1;
+  days.forEach((d,i) => {
+    const wk = dowIdx(d.date) === 0 && i > 0 ? " week" : "";
+    const segs = d.items.map(t => '<i class="rib-seg" style="height:'+(100/Math.max(1,d.items.length))+'%;background:'+STAGES[t.si].col+'"></i>').join("");
+    const flag = d.items.some(t => t.status === "over") ? '<i class="rib-flag"></i>' : "";
+    const ttl = longFr(d.date)+" · "+d.items.length+"/"+d.cap+(d.overflow?" · "+d.overflow+" reportés":"");
+    bars += '<button class="rib-day'+wk+'" data-j="'+iso(d.date)+'" title="'+esc(ttl)+'">'+
+      '<i class="rib-ghost" style="height:'+(100*d.cap/scale)+'%"></i>'+
+      '<span class="rib-stack" style="height:'+(100*d.items.length/scale)+'%">'+segs+'</span>'+flag+'</button>';
+    const m = d.date.getMonth();
+    axis += '<span class="rib-tick'+wk+'">'+(m!==lm?"<b>"+MONTHS[m].slice(0,4)+"</b>":"")+'</span>';
+    if(m!==lm) lm = m;
+  });
+  el("ribbon").innerHTML = bars;
+  el("ribAxis").innerHTML = axis;
+  el("ribbon").querySelectorAll("[data-j]").forEach(b => b.addEventListener("click", () => {
+    setTab("agenda");
+    const t = document.querySelector('[data-day="'+b.dataset.j+'"]');
+    if(t) t.scrollIntoView({behavior:"smooth", block:"center"});
+  }));
+}
+
+/* ---------- onglets ---------- */
+
+const TABS = [
+  {id:"agenda", n:"Agenda"},
+  {id:"retards", n:"Retards"},
+  {id:"reserve", n:"Réserve"},
+  {id:"couverture", n:"Couverture"},
+  {id:"reglages", n:"Réglages"}
+];
+function renderTabs(){
+  const counts = { retards: overdueItems().length, reserve: reserveItems().length, agenda:"", couverture:"", reglages:"" };
+  el("tabs").innerHTML = TABS.map(t =>
+    '<button class="tab" role="tab" data-t="'+t.id+'" aria-selected="'+(TAB===t.id)+'">'+t.n+
+    (counts[t.id] !== "" ? "<b>"+counts[t.id]+"</b>" : "")+'</button>').join("");
+  el("tabs").querySelectorAll("[data-t]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.t)));
+}
+function setTab(id){
+  TAB = id;
+  TABS.forEach(t => { el("panel-"+t.id).hidden = t.id !== id; });
+  el("tabs").querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === id));
+  if(id === "reglages") renderReglages();
+}
+
+/* ---------- agenda ---------- */
+
+function doneOnDate(){
+  const map = {};
+  S.items.forEach(it => {
+    for(const k in it.done){
+      const d = it.done[k];
+      (map[d] = map[d] || []).push({ it, si:SI[k], doneFlag:true });
+    }
+  });
+  return map;
+}
+
+function renderAgenda(){
+  const dmap = doneOnDate();
+  const days = VIEW.days.slice(0, S.horizon);
+  const tIso = iso(today());
+  let prev = null, html = "";
+
+  days.forEach(d => {
+    const k = iso(d.date);
+    const already = (dmap[k] || []);
+    if(!d.items.length && !already.length && d.cap > 0) return;
+    if(prev){
+      const hole = diffDays(d.date, prev) - 1;
+      if(hole > 0) html += '<p class="gap">'+hole+" jour"+(hole>1?"s":"")+" sans révision</p>";
+    }
+    prev = d.date;
+    const isOff = S.capOv[k] === 0;
+    const pct = d.cap ? Math.min(100, 100*d.items.length/d.cap) : 0;
+    const rows = already.concat(d.items).map(t => {
+      const s = STAGES[t.si];
+      const act = S.acts[t.si] || "";
+      let lt = "";
+      if(!t.doneFlag && t.status === "over") lt = '<span class="late over">+'+t.late+" j</span>";
+      else if(!t.doneFlag && t.status === "shift") lt = '<span class="late shift">+'+t.late+" j</span>";
+      return '<li class="item'+(t.doneFlag?" done":"")+'">'+
+        '<input type="checkbox" data-id="'+t.it.id+'" data-si="'+t.si+'" data-d="'+k+'"'+(t.doneFlag?" checked":"")+'>'+
+        '<span class="stage" style="background:'+s.col+';color:'+s.fg+'">'+s.k+'</span>'+
+        '<span class="name"><u>'+esc(t.it.num)+'</u>'+esc(t.it.nom)+'</span>'+
+        '<span class="act">'+esc(act)+'</span>'+lt+'</li>';
+    }).join("");
+
+    html += '<article class="day'+(d.overflow?" saturated":"")+(isOff?" off":"")+(k===tIso?" is-today":"")+'" data-day="'+k+'">'+
+      '<div class="day-head">'+
+        '<span class="day-date"><b>'+longFr(d.date)+'</b> '+fr(d.date)+'</span>'+
+        (d.overflow?'<span class="day-badge">'+d.overflow+' reporté'+(d.overflow>1?"s":"")+'</span>':'')+
+        '<span class="day-tools">'+
+          (isOff ? '' : '<span class="gauge"><i style="width:'+pct+'%"></i></span>'+d.items.length+"/"+d.cap)+
+          '<button class="mini'+(isOff?" on":"")+'" data-off="'+k+'">'+(isOff?"jour off":"marquer off")+'</button>'+
+        '</span>'+
+      '</div>'+
+      (rows ? '<ul class="items">'+rows+'</ul>' : '') +
+      (d.free > 0 ? '<p class="free">'+d.free+' place'+(d.free>1?"s":"")+' libre'+(d.free>1?"s":"")+' · <button data-fill="'+k+'">choisir des items neufs</button></p>' : '')+
+      '</article>';
+  });
+
+  el("panel-agenda").innerHTML = html || '<div class="blank">Rien de prévu sur cet horizon.</div>';
+
+  el("panel-agenda").querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
+    const it = S.items[+cb.dataset.id], key = STAGES[+cb.dataset.si].k;
+    if(cb.checked) it.done[key] = cb.dataset.d; else delete it.done[key];
+    if(key === "J0" && cb.checked) it.plan = null;
+    refresh();
+  }));
+  el("panel-agenda").querySelectorAll("[data-off]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.off;
+    if(S.capOv[k] === 0) delete S.capOv[k]; else S.capOv[k] = 0;
+    refresh();
+  }));
+  el("panel-agenda").querySelectorAll("[data-fill]").forEach(b => b.addEventListener("click", () => {
+    RES.date = b.dataset.fill;
+    setTab("reserve");
+    renderReserve();
+    window.scrollTo({top:0, behavior:"smooth"});
+  }));
+}
+
+/* ---------- retards ---------- */
+
+function renderRetards(){
+  const od = overdueItems();
+  if(!od.length){ el("panel-retards").innerHTML = '<div class="blank">Aucun item en retard. Tout est dans les temps.</div>'; return; }
+  const buckets = [["1 à 7 jours",0,7],["8 à 30 jours",8,30],["31 à 90 jours",31,90],["plus de 90 jours",91,1e9]];
+  const counts = buckets.map(b => od.filter(o => o.late >= b[1] && o.late <= b[2]).length);
+
+  const rows = od.map(o => {
+    const s = STAGES[o.si];
+    const li = lastIdx(o.it);
+    return '<li class="row">'+
+      '<input type="checkbox" data-id="'+o.it.id+'"'+(RET.sel.has(o.it.id)?" checked":"")+'>'+
+      '<span class="name"><u>'+esc(o.it.num)+'</u>'+esc(o.it.nom)+'</span>'+
+      '<span class="meta">'+(li>=0?STAGES[li].k:"—")+' → <b style="color:'+s.col+'">'+s.k+'</b> · '+frShort(o.due)+' · +'+o.late+' j</span>'+
+      '</li>';
+  }).join("");
+
+  el("panel-retards").innerHTML =
+    '<div class="card"><p class="card-title">Ancienneté du retard</p><div class="figures">'+
+      buckets.map((b,i) => '<div class="fig'+(i>=2&&counts[i]?" hot":"")+'"><b>'+counts[i]+'</b><span>'+b[0]+'</span></div>').join("")+
+    '</div><p class="hint">Ces items sont déjà réinjectés dans l\'agenda, les plus anciens en premier. Réinitialiser efface les J validés et renvoie l\'item en réserve, ce qui est le geste honnête quand le retard dépasse largement l\'intervalle du J attendu.</p></div>'+
+    '<div class="bar"><button class="btn ghost" id="retAll">Tout sélectionner</button>'+
+      '<button class="btn ghost" id="retNone">Tout désélectionner</button>'+
+      '<button class="btn" id="retReset" disabled>Réinitialiser la sélection</button>'+
+      '<span class="meta" id="retCount"></span></div>'+
+    '<ul class="list">'+rows+'</ul>';
+
+  const sync = () => {
+    el("retCount").textContent = RET.sel.size ? RET.sel.size+" sélectionné(s)" : "";
+    el("retReset").disabled = RET.sel.size === 0;
+  };
+  el("panel-retards").querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
+    const id = +cb.dataset.id;
+    if(cb.checked) RET.sel.add(id); else RET.sel.delete(id);
+    sync();
+  }));
+  el("retAll").addEventListener("click", () => { od.forEach(o => RET.sel.add(o.it.id)); renderRetards(); });
+  el("retNone").addEventListener("click", () => { RET.sel.clear(); renderRetards(); });
+  el("retReset").addEventListener("click", () => {
+    const n = RET.sel.size;
+    RET.sel.forEach(id => { S.items[id].done = {}; S.items[id].plan = null; });
+    RET.sel.clear();
+    refresh();
+    toast(n+" item(s) remis en réserve.");
+  });
+  sync();
+}
+
+/* ---------- réserve ---------- */
+
+function renderReserve(){
+  const all = reserveItems();
+  const sups = [...new Set(S.items.map(i => i.sup).filter(Boolean))].sort();
+  const refs = [...new Set(S.items.map(i => i.ref))].sort();
+  const q = RES.q.toLowerCase();
+  const list = all.filter(it =>
+    (!q || (it.nom+" "+it.num).toLowerCase().includes(q)) &&
+    (!RES.sup || it.sup === RES.sup) &&
+    (!RES.ref || it.ref === RES.ref));
+
+  const pending = plannedNotDone().sort((a,b) => a.plan < b.plan ? -1 : 1);
+  const dIso = RES.date || iso(today());
+  const dayObj = VIEW.days.find(d => iso(d.date) === dIso);
+  const freeTxt = dayObj ? dayObj.free+" place(s) libre(s) le "+fr(fromIso(dIso)) : "jour hors de l'horizon calculé";
+
+  el("panel-reserve").innerHTML =
+    '<div class="card"><p class="card-title">Programmer un premier passage</p>'+
+      '<div class="bar">'+
+        '<input type="date" id="resDate" value="'+dIso+'">'+
+        '<button class="btn" id="resGo" disabled>Programmer la sélection</button>'+
+        '<span class="meta" id="resInfo">'+esc(freeTxt)+'</span>'+
+      '</div>'+
+      '<p class="hint">Rien n\'est placé automatiquement. Tu choisis les items et le jour, et toute la chaîne des douze J en découle. Le compteur de places libres tient compte des révisions déjà prévues ce jour là.</p>'+
+    '</div>'+
+    (pending.length ? '<div class="card"><p class="card-title">Premiers passages programmés, pas encore validés</p><ul class="list" style="max-height:180px">'+
+      pending.map(it => '<li class="row"><span></span><span class="name"><u>'+esc(it.num)+'</u>'+esc(it.nom)+'</span>'+
+        '<span class="meta">'+fr(fromIso(it.plan))+' · <button class="mini" data-unplan="'+it.id+'">retirer</button></span></li>').join("")+
+      '</ul></div>' : '')+
+    '<div class="bar">'+
+      '<input type="text" id="resQ" placeholder="Chercher un item par nom ou numéro" value="'+esc(RES.q)+'">'+
+      '<select id="resSup"><option value="">Tous supports</option>'+sups.map(s => '<option'+(RES.sup===s?" selected":"")+'>'+esc(s)+'</option>').join("")+'</select>'+
+      '<select id="resRef"><option value="">Tous collèges</option>'+refs.map(s => '<option'+(RES.ref===s?" selected":"")+'>'+esc(s)+'</option>').join("")+'</select>'+
+      '<span class="meta">'+list.length+' / '+all.length+' en réserve</span>'+
+    '</div>'+
+    '<ul class="list">'+(list.length ? list.map(it =>
+      '<li class="row"><input type="checkbox" data-id="'+it.id+'"'+(RES.sel.has(it.id)?" checked":"")+'>'+
+      '<span class="name"><u>'+esc(it.num)+'</u>'+esc(it.nom)+'</span>'+
+      '<span class="meta">'+esc(it.sup||"—")+' · '+esc(it.ref)+(it.anki?" · Anki":"")+'</span></li>').join("")
+      : '<li class="row"><span></span><span class="name">Aucun item ne correspond.</span><span></span></li>')+'</ul>';
+
+  const syncGo = () => {
+    const n = RES.sel.size;
+    el("resGo").disabled = n === 0;
+    el("resGo").textContent = n ? "Programmer "+n+" item"+(n>1?"s":"") : "Programmer la sélection";
+  };
+  el("resQ").addEventListener("input", e => { RES.q = e.target.value; renderReserve(); el("resQ").focus(); });
+  el("resSup").addEventListener("change", e => { RES.sup = e.target.value; renderReserve(); });
+  el("resRef").addEventListener("change", e => { RES.ref = e.target.value; renderReserve(); });
+  el("resDate").addEventListener("change", e => { RES.date = e.target.value; renderReserve(); });
+  el("panel-reserve").querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
+    const id = +cb.dataset.id;
+    if(cb.checked) RES.sel.add(id); else RES.sel.delete(id);
+    syncGo();
+  }));
+  el("panel-reserve").querySelectorAll("[data-unplan]").forEach(b => b.addEventListener("click", () => {
+    S.items[+b.dataset.unplan].plan = null; refresh();
+  }));
+  el("resGo").addEventListener("click", () => {
+    const d = el("resDate").value;
+    if(!d) return toast("Choisis une date.");
+    const n = RES.sel.size;
+    RES.sel.forEach(id => { S.items[id].plan = d; });
+    RES.sel.clear();
+    refresh();
+    setTab("agenda");
+    toast(n+" premier(s) passage(s) programmé(s) le "+fr(fromIso(d))+".");
+  });
+  syncGo();
+}
+
+/* ---------- couverture ---------- */
+
+function renderCouverture(){
+  const groups = {};
+  S.items.forEach(it => { (groups[it.ref] = groups[it.ref] || []).push(it); });
+  const keys = Object.keys(groups).sort((a,b) => groups[b].length - groups[a].length);
+  const perStage = STAGES.map(() => 0);
+  let none = 0;
+  S.items.forEach(it => { const li = lastIdx(it); if(li < 0) none++; else perStage[li]++; });
+
+  const legend = '<div class="legend"><span><i style="background:var(--none)"></i>pas commencé ('+none+')</span>'+
+    STAGES.map((s,i) => perStage[i] ? '<span><i style="background:'+s.col+'"></i>'+s.k+' ('+perStage[i]+')</span>' : "").join("")+'</div>';
+
+  const detail = DETAIL !== null ? (() => {
+    const it = S.items[DETAIL];
+    const chain = STAGES.map((s,i) => {
+      if(it.done[s.k]) return '<span style="color:'+s.col+'">'+s.k+" "+frShort(fromIso(it.done[s.k]))+"</span>";
+      const p = VIEW.plan[it.id] && VIEW.plan[it.id][i];
+      if(p) return '<span>'+s.k+" prévu "+frShort(p)+"</span>";
+      const d = dueOf(it, i);
+      return d ? '<span style="color:var(--faint)">'+s.k+" vers "+frShort(d)+"</span>" : '<span style="color:var(--faint)">'+s.k+"</span>";
+    }).join("");
+    return '<div class="detail"><b>'+esc(it.num)+" — "+esc(it.nom)+'</b><br>'+
+      esc(it.sup||"support non renseigné")+" · "+esc(it.ref)+(it.anki?" · Anki fait":"")+
+      '<div class="chain">'+chain+'</div></div>';
+  })() : "";
+
+  el("panel-couverture").innerHTML = legend + detail + keys.map(k => {
+    const g = groups[k].slice().sort((a,b) => lastIdx(b) - lastIdx(a));
+    const started = g.filter(i => i.done.J0).length;
+    return '<div class="cov-group"><h4>'+esc(k)+' <span>· '+started+"/"+g.length+' démarrés</span></h4><div class="squares">'+
+      g.map(it => {
+        const li = lastIdx(it);
+        const c = li < 0 ? "var(--none)" : STAGES[li].col;
+        return '<button class="sq" style="background:'+c+'" data-id="'+it.id+'" title="'+esc(it.num+" "+it.nom+" · "+(li<0?"pas commencé":STAGES[li].k))+'"></button>';
+      }).join("")+'</div></div>';
+  }).join("");
+
+  el("panel-couverture").querySelectorAll(".sq").forEach(b => b.addEventListener("click", () => {
+    DETAIL = DETAIL === +b.dataset.id ? null : +b.dataset.id;
+    renderCouverture();
+  }));
+}
+
+/* ---------- réglages ---------- */
+
+function renderReglages(){
+  el("panel-reglages").innerHTML =
+    '<div class="card"><p class="card-title">Capacité, en nombre d\'items par jour</p>'+
+      '<div class="week-caps">'+DOW.map((d,i) => '<div><label for="c'+i+'">'+d+'</label><input type="number" id="c'+i+'" min="0" max="60" value="'+S.caps[i]+'"></div>').join("")+'</div>'+
+      '<div class="grid2" style="margin-top:16px">'+
+        '<div><label class="lbl" for="stDate">Départ du planning</label><input type="date" id="stDate" value="'+S.startIso+'" style="width:100%"></div>'+
+        '<div><label class="lbl" for="hz">Horizon affiché, en jours</label><input type="number" id="hz" min="14" max="365" value="'+S.horizon+'" style="width:100%"></div>'+
+      '</div>'+
+      '<p class="hint">Les jours marqués off dans l\'agenda passent devant ces valeurs. Un jour passé sans rien cocher fait simplement remonter ses items au jour suivant.</p>'+
+    '</div>'+
+    '<div class="card"><p class="card-title">Action et tolérance de retard par J</p><div class="acts">'+
+      STAGES.map((s,i) => '<div class="actrow"><span class="stage" style="background:'+s.col+';color:'+s.fg+'">'+s.k+'</span>'+
+        '<input type="text" id="a'+i+'" value="'+esc(S.acts[i])+'" placeholder="action à faire pour ce J">'+
+        '<input type="number" id="t'+i+'" min="0" max="60" value="'+S.tols[i]+'" title="retard toléré en jours"></div>').join("")+
+    '</div><p class="hint">La colonne de droite est le retard toléré en jours. Au delà, la révision reste planifiée mais s\'affiche en rouge.</p></div>'+
+    '<div class="card"><p class="card-title">Données</p>'+
+      '<div class="bar"><button class="btn" id="doSave">Sauvegarder dans un fichier</button>'+
+      '<button class="btn ghost" id="doLoadBtn">Charger un fichier</button>'+
+      '<input type="file" id="doLoad" accept=".json" hidden>'+
+      '<button class="btn ghost" id="doCsv">Exporter au format du tableur</button>'+
+      '<button class="btn ghost" id="doIcs">Exporter vers l\'agenda</button>'+
+      '<button class="btn ghost" id="doReset">Repartir des données d\'origine</button></div>'+
+      '<p class="hint">Le fichier de sauvegarde contient tout, y compris les J cochés, les premiers passages programmés et les jours off. L\'export tableur reprend la structure de ton classeur.</p>'+
+    '</div>'+
+    (!STORAGE_OK ? '<div class="card" style="border-color:var(--alert)"><p class="card-title" style="color:var(--alert)">Sauvegarde automatique indisponible</p>'+
+      '<p class="hint">Ce navigateur refuse le stockage local sur ce fichier, tes modifications ne survivront pas à la fermeture de la page. Utilise <b>Sauvegarder dans un fichier</b> après chaque session, puis <b>Charger un fichier</b> la fois suivante pour reprendre où tu en étais.</p></div>' : "") +
+    (RAW.notes.length ? '<div class="card"><p class="card-title">'+RAW.notes.length+' anomalies relevées à l\'import</p><div class="notes">'+
+      RAW.notes.map(n => "<div>"+esc(n)+"</div>").join("")+'</div>'+
+      '<p class="hint">Les années 2027 et 2028 ont été lues comme 2026 : les jours et les mois s\'enchaînent correctement en avril 2026, où se trouve déjà le gros de ton activité. Vérifie ces lignes dans ton classeur.</p></div>' : "");
+
+  DOW.forEach((_,i) => el("c"+i).addEventListener("change", e => { S.caps[i] = Math.max(0, +e.target.value||0); refresh(); }));
+  STAGES.forEach((_,i) => {
+    el("a"+i).addEventListener("input", e => { S.acts[i] = e.target.value; renderAgenda(); save(true); });
+    el("t"+i).addEventListener("change", e => { S.tols[i] = Math.max(0, +e.target.value||0); refresh(); });
+  });
+  el("stDate").addEventListener("change", e => { S.startIso = e.target.value || iso(today()); refresh(); });
+  el("hz").addEventListener("change", e => { S.horizon = Math.max(14, +e.target.value||90); refresh(); });
+
+  el("doSave").addEventListener("click", () => dl("methode-des-j.json","application/json",JSON.stringify(S)));
+  el("doLoadBtn").addEventListener("click", () => el("doLoad").click());
+  el("doLoad").addEventListener("change", e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = () => { try{ S = JSON.parse(r.result); refresh(); renderReglages(); toast("État rechargé."); }catch(err){ toast("Fichier illisible."); } };
+    r.readAsText(f);
+  });
+  el("doCsv").addEventListener("click", exportCsv);
+  el("doIcs").addEventListener("click", exportIcs);
+  el("doReset").addEventListener("click", () => {
+    if(!confirm("Tout ce qui a été coché, programmé ou marqué off sera perdu. Continuer ?")) return;
+    S = freshState(); refresh(); renderReglages(); toast("Données d'origine restaurées.");
+  });
+}
+
+/* ---------- exports ---------- */
+
+function dl(name, mime, content){
+  const b = new Blob([content], {type:mime+";charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportCsv(){
+  const q = v => '"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const head = ["N°ITEM","Nom item","Support","ANKI OK ?"].concat(STAGES.map(s => s.k)).concat(["Collège REF"]);
+  const lines = [head.map(q).join(";")];
+  S.items.forEach(it => {
+    lines.push([q(it.num), q(it.nom), q(it.sup), q(it.anki?"OK":"")]
+      .concat(STAGES.map(s => q(it.done[s.k] ? fr(fromIso(it.done[s.k])) : "")))
+      .concat([q(it.ref === "Sans collège" ? "" : it.ref)]).join(";"));
+  });
+  dl("items-et-j.csv","text/csv","\uFEFF"+lines.join("\n"));
+  toast("Tableur exporté.");
+}
+function exportIcs(){
+  const stamp = new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const out = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Methode des J//FR","CALSCALE:GREGORIAN"];
+  VIEW.days.slice(0, S.horizon).forEach((d,i) => {
+    if(!d.items.length) return;
+    const desc = d.items.map(t => STAGES[t.si].k+" — "+t.it.num+" "+t.it.nom+(S.acts[t.si]?" — "+S.acts[t.si]:"")).join("\\n");
+    out.push("BEGIN:VEVENT","UID:j-"+iso(d.date)+"-"+i+"@methode-des-j","DTSTAMP:"+stamp,
+      "DTSTART;VALUE=DATE:"+iso(d.date).replace(/-/g,""),
+      "DTEND;VALUE=DATE:"+iso(addDays(d.date,1)).replace(/-/g,""),
+      "SUMMARY:Révisions · "+d.items.length+" item"+(d.items.length>1?"s":""),
+      "DESCRIPTION:"+desc,"END:VEVENT");
+  });
+  out.push("END:VCALENDAR");
+  dl("methode-des-j.ics","text/calendar",out.join("\r\n"));
+  toast("Fichier .ics téléchargé.");
+}
+
+function toast(m){
+  const t = el("toast"); t.textContent = m; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2400);
+}
+
+/* ---------- démarrage ---------- */
+
+(async function(){
+  await load();
+  refresh(false);
+  setTab("agenda");
+})();
+</script>
+</body>
+</html>
