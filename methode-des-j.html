@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --paper:#EDF0EE; --surface:#FFF; --ink:#141917; --muted:#5F6E69; --faint:#8A9791;
@@ -96,8 +97,21 @@ h1 em{font-style:normal;color:#3E9CA8}
 .gap::before,.gap::after{content:"";flex:1;border-top:1px dashed var(--line-strong)}
 
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-input[type=text],input[type=number],input[type=date],select{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:2px;padding:7px 9px}
+input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:2px;padding:7px 9px}
 input[type=text]{min-width:200px;flex:1}
+
+#authGate{max-width:380px;margin:64px auto;padding:0 20px}
+#authGate .card{padding:22px 20px}
+#authGate h1{font-size:28px;margin-bottom:4px}
+#authGate .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+#authGate .field label{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}
+#authGate input{width:100%}
+#authGate .btn{width:100%;margin-top:4px}
+#authGate .switch{margin-top:14px;font-size:13px;color:var(--muted);text-align:center}
+#authGate .switch a{color:#3E9CA8;cursor:pointer;text-decoration:underline}
+#authGate .msg{font-size:13px;margin-top:10px;padding:8px 10px;border-radius:2px}
+#authGate .msg.err{background:var(--alert-soft);color:var(--alert)}
+#authGate .msg.ok{background:#E4F3EC;color:#1F7A4D}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid #3E9CA8;outline-offset:1px}
 .btn{font-family:var(--body);font-size:13px;font-weight:500;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
 .btn.ghost{background:none;color:var(--ink);border-color:var(--line-strong)}
@@ -160,13 +174,33 @@ label.lbl{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div id="authGate">
+  <div class="card">
+    <p class="eyebrow">EDN · méthode des J</p>
+    <h1 id="authTitle">Se connecter</h1>
+    <div class="field">
+      <label for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="authPass">Mot de passe</label>
+      <input type="password" id="authPass" autocomplete="current-password">
+    </div>
+    <button class="btn" id="authSubmit">Se connecter</button>
+    <div class="switch">Pas encore de compte ? <a id="authSwitch">Créer un compte</a></div>
+    <div id="authMsg" style="display:none" class="msg"></div>
+  </div>
+</div>
+
+<div class="wrap" id="appRoot" style="display:none">
   <header class="masthead">
     <div>
       <p class="eyebrow">EDN · méthode des J · Anki +</p>
       <h1>Huit <em>J</em>,<br>quatre cent trente-six items</h1>
     </div>
     <div class="today" id="todayBox"></div>
+    <button class="btn ghost" id="authLogout" style="margin-left:12px">Déconnexion</button>
   </header>
 
   <div class="figures" id="figures"></div>
@@ -220,6 +254,14 @@ function dowIdx(d){ return (d.getDay()+6)%7; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function el(id){ return document.getElementById(id); }
 
+/* ================= compte et base distante ================= */
+
+const SUPABASE_URL = "https://quiekeoncwbybdyxsuml.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1aWVrZW9uY3dieWJkeXhzdW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NTgzNzksImV4cCI6MjEwMzIzNDM3OX0.sIsgSUMikqRD9Dkvz4x8aUmlhEUvmEpc-6U4Q5uWIic";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let sbUser = null;
+let CATALOG = null;
+
 /* ================= état ================= */
 
 const RAW = JSON.parse(el("dataset").textContent);
@@ -232,13 +274,17 @@ function keepScale(d){
   return out;
 }
 
+function blankItems(){
+  return CATALOG.map(c => ({
+    id: c.id, num: c.num, nom: c.nom, sup: c.sup || "", ref: c.ref || "Sans collège",
+    anki: !!c.anki, done: {}, plan: null, off: false
+  }));
+}
+
 function freshState(){
   return {
     v: 1,
-    items: RAW.items.map((it,i) => ({
-      id: i, num: it.n, nom: it.t, sup: it.s || "", ref: it.r || "Sans collège",
-      anki: !!it.a, done: keepScale(it.d), plan: null, off: false
-    })),
+    items: blankItems(),
     acts: STAGES.map(s => s.act),
     tols: STAGES.map(s => s.tol),
     caps: [12,12,12,12,12,8,8],
@@ -250,16 +296,79 @@ function freshState(){
 
 let STORAGE_OK = true;
 
-async function load(){
+async function loadCatalog(){
   try{
-    const raw = localStorage.getItem(KEY);
-    if(raw){ S = JSON.parse(raw); return; }
+    const { data, error } = await sb.from("items").select("*").order("id");
+    if(error) throw error;
+    CATALOG = data;
   }catch(e){
-    STORAGE_OK = false;
-    console.warn("stockage local indisponible sur cette page :", e);
+    console.warn("référentiel distant indisponible, secours local :", e);
+    CATALOG = RAW.items.map((it,i) => ({ id:i, num:it.n, nom:it.t, sup:it.s, ref:it.r, anki:it.a }));
+  }
+}
+
+async function loadUserProgress(){
+  const { data: rows } = await sb.from("user_items").select("*").eq("user_id", sbUser.id);
+  const map = {}; (rows||[]).forEach(r => map[r.item_id] = r);
+  const items = CATALOG.map(c => {
+    const r = map[c.id];
+    return {
+      id: c.id, num: c.num, nom: c.nom, sup: c.sup || "", ref: c.ref || "Sans collège",
+      anki: !!c.anki, done: r ? keepScale(r.done||{}) : {}, plan: r && r.plan ? r.plan : null, off: r ? !!r.off : false
+    };
+  });
+  const { data: settingsRow } = await sb.from("user_settings").select("settings").eq("user_id", sbUser.id).maybeSingle();
+  const st = (settingsRow && settingsRow.settings) || {};
+  S = {
+    v: 1, items,
+    acts: st.acts || STAGES.map(s => s.act),
+    tols: st.tols || STAGES.map(s => s.tol),
+    caps: st.caps || [12,12,12,12,12,8,8],
+    capOv: st.capOv || {},
+    startIso: st.startIso || iso(today()),
+    horizon: st.horizon || 90
+  };
+}
+
+async function load(){
+  await loadCatalog();
+  if(sbUser){
+    try{ await loadUserProgress(); return; }
+    catch(e){ console.warn("progression distante indisponible :", e); }
   }
   S = freshState();
 }
+
+let _syncTimer = null;
+function queueSync(){
+  if(!sbUser) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(syncToSupabase, 700);
+}
+async function syncToSupabase(){
+  if(!sbUser) return;
+  const rows = S.items.map(it => ({ user_id: sbUser.id, item_id: it.id, done: it.done, plan: it.plan, off: it.off }));
+  const settings = { acts:S.acts, tols:S.tols, caps:S.caps, capOv:S.capOv, startIso:S.startIso, horizon:S.horizon };
+  const [{ error: e1 }, { error: e2 }] = await Promise.all([
+    sb.from("user_items").upsert(rows),
+    sb.from("user_settings").upsert({ user_id: sbUser.id, settings })
+  ]);
+  if(e1 || e2) console.warn("synchronisation distante impossible :", e1 || e2);
+}
+
+async function importLegacyData(){
+  if(!sbUser) return;
+  if(!confirm("Importer les données déjà cochées dans ce fichier vers ton compte ? Les dates déjà enregistrées en ligne pour un même item ne seront pas écrasées.")) return;
+  RAW.items.forEach((it,i) => {
+    const d = keepScale(it.d || {});
+    if(Object.keys(d).length && S.items[i]){
+      S.items[i].done = Object.assign({}, d, S.items[i].done);
+    }
+  });
+  refresh();
+  toast("Données historiques importées.");
+}
+
 async function save(quiet){
   try{
     localStorage.setItem(KEY, JSON.stringify(S));
@@ -269,6 +378,7 @@ async function save(quiet){
     STORAGE_OK = false;
     if(!quiet) toast("Sauvegarde automatique impossible dans ce navigateur, utilise Sauvegarder dans un fichier.");
   }
+  queueSync();
 }
 
 /* ================= dérivation ================= */
@@ -744,6 +854,11 @@ function renderReglages(){
         '<input type="text" id="a'+i+'" value="'+esc(S.acts[i])+'" placeholder="action à faire pour ce J">'+
         '<input type="number" id="t'+i+'" min="0" max="60" value="'+S.tols[i]+'" title="retard toléré en jours"></div>').join("")+
     '</div><p class="hint">La colonne de droite est le retard toléré en jours. Au delà, la révision reste planifiée mais s\'affiche en rouge.</p></div>'+
+    '<div class="card"><p class="card-title">Compte</p>'+
+      '<p class="hint">Connecté en tant que '+esc(sbUser ? sbUser.email : "—")+'. Tes données sont liées à ce compte et suivent sur n\'importe quel appareil.</p>'+
+      '<div class="bar"><button class="btn ghost" id="doImportLegacy">Importer les données déjà cochées dans ce fichier</button></div>'+
+      '<p class="hint">À utiliser une seule fois si ce fichier contenait déjà des révisions cochées avant la mise en place des comptes. Ce qui est déjà enregistré en ligne n\'est jamais écrasé.</p>'+
+    '</div>'+
     '<div class="card"><p class="card-title">Données</p>'+
       '<div class="bar"><button class="btn" id="doSave">Sauvegarder dans un fichier</button>'+
       '<button class="btn ghost" id="doLoadBtn">Charger un fichier</button>'+
@@ -777,6 +892,7 @@ function renderReglages(){
   });
   el("doCsv").addEventListener("click", exportCsv);
   el("doIcs").addEventListener("click", exportIcs);
+  el("doImportLegacy").addEventListener("click", importLegacyData);
   el("doReset").addEventListener("click", () => {
     if(!confirm("Tout ce qui a été coché, programmé ou marqué off sera perdu. Continuer ?")) return;
     S = freshState(); refresh(); renderReglages(); toast("Données d'origine restaurées.");
@@ -825,13 +941,79 @@ function toast(m){
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2400);
 }
 
-/* ---------- démarrage ---------- */
+/* ---------- authentification ---------- */
 
-(async function(){
+let authMode = "login";
+
+function authShow(msg, ok){
+  const box = el("authMsg");
+  if(!msg){ box.style.display = "none"; return; }
+  box.textContent = msg;
+  box.className = "msg " + (ok ? "ok" : "err");
+  box.style.display = "block";
+}
+function setAuthMode(mode){
+  authMode = mode;
+  el("authTitle").textContent = mode === "signup" ? "Créer un compte" : "Se connecter";
+  el("authSubmit").textContent = mode === "signup" ? "Créer mon compte" : "Se connecter";
+  el("authSwitch").textContent = mode === "signup" ? "J'ai déjà un compte" : "Créer un compte";
+  authShow(null);
+}
+function showAuthGate(){
+  el("appRoot").style.display = "none";
+  el("authGate").style.display = "";
+  el("authPass").value = "";
+}
+async function startApp(){
+  el("authGate").style.display = "none";
+  el("appRoot").style.display = "";
   await load();
   refresh(false);
   setTab("agenda");
-})();
+}
+
+async function initAuth(){
+  el("authSwitch").addEventListener("click", () => setAuthMode(authMode === "signup" ? "login" : "signup"));
+  el("authSubmit").addEventListener("click", async () => {
+    const email = el("authEmail").value.trim();
+    const password = el("authPass").value;
+    if(!email || !password){ authShow("Email et mot de passe requis."); return; }
+    el("authSubmit").disabled = true;
+    try{
+      if(authMode === "signup"){
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if(error) throw error;
+        if(data.session){ sbUser = data.user; await startApp(); }
+        else { authShow("Compte créé. Vérifie tes emails pour confirmer ton adresse, puis connecte-toi.", true); setAuthMode("login"); }
+      } else {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if(error) throw error;
+        sbUser = data.user;
+        await startApp();
+      }
+    }catch(e){
+      authShow(e.message || "Une erreur est survenue.");
+    }finally{
+      el("authSubmit").disabled = false;
+    }
+  });
+
+  el("authLogout").addEventListener("click", async () => {
+    await sb.auth.signOut();
+  });
+
+  sb.auth.onAuthStateChange((event) => {
+    if(event === "SIGNED_OUT"){ sbUser = null; showAuthGate(); }
+  });
+
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ sbUser = session.user; await startApp(); }
+  else { showAuthGate(); }
+}
+
+/* ---------- démarrage ---------- */
+
+initAuth();
 </script>
 </body>
 </html>
